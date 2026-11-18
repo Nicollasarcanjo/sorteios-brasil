@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,6 +28,8 @@ import {
   buildPublicLivePartners,
   buildRafflePricing,
   getAllSoldNumbersForRaffle,
+  getStorageBackend,
+  initStore,
   isReservationHoldingNumbers,
   readDbSnapshot,
   toPublicRaffleProjection,
@@ -61,8 +64,34 @@ const PORT = Number(process.env.PORT || 3000);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 async function startServer() {
+  // Carrega o banco (Supabase ou arquivo local) antes de aceitar requisições.
+  await initStore();
+
   const app = express();
   app.set('trust proxy', 1);
+
+  // Express 4 não captura rejeições de handlers async: encaminha para o
+  // error handler (ex.: falha ao gravar no Supabase) em vez de derrubar o processo.
+  for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+    const original = app[method].bind(app) as (...args: unknown[]) => unknown;
+    (app as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
+      if (args.length < 2) return original(...args); // app.get('setting')
+      const wrapped = args.map((handler) => {
+        if (typeof handler !== 'function' || handler.length >= 4) return handler;
+        return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+          try {
+            const out = handler(req, res, next);
+            if (out && typeof (out as Promise<unknown>).then === 'function') {
+              (out as Promise<unknown>).catch(next);
+            }
+          } catch (err) {
+            next(err);
+          }
+        };
+      });
+      return original(...wrapped);
+    };
+  }
 
   // Strict payload size bound (Denial-of-Wallet / DoS guard)
   app.use(express.json({limit: '64kb'}));
@@ -1639,8 +1668,21 @@ async function startServer() {
     }
   }
 
+  app.use(
+    (err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+      console.error('[api] Erro não tratado:', err);
+      if (res.headersSent) {
+        next(err);
+        return;
+      }
+      res.status(500).json({error: 'Erro interno ao processar a solicitação. Tente novamente.'});
+    },
+  );
+
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Leonida VI Sorteios server listening on http://0.0.0.0:${PORT}`);
+    console.log(
+      `Sorteios Brasil server listening on http://0.0.0.0:${PORT} (db: ${getStorageBackend()})`,
+    );
   });
 }
 

@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
 import type {
   AuditLogEntry,
@@ -14,8 +12,14 @@ import {maskBuyerDisplayName} from './security.ts';
 import {detectPlatformFromUrl} from './liveResolver.ts';
 import {ABACATEPAY_PIX_FEE_BRL} from './abacatepay.ts';
 
-const DB_DIR = path.resolve(process.cwd(), 'server/data');
-const DB_PATH = path.join(DB_DIR, 'db.json');
+export {
+  getStorageBackend,
+  initStore,
+  readDbSnapshot,
+  resetCachedDbForCleanState,
+  withDbTransaction,
+} from './persistence.ts';
+
 
 export const TARGET_PROFIT_RATE = 1.0;
 
@@ -59,114 +63,6 @@ export function getBaselinePreSoldSet(
   return new Set<number>();
 }
 
-function createEmptyDatabase(): DatabaseState {
-  return {
-    raffles: [],
-    reservations: [],
-    referralCodes: [],
-    referralAlerts: [],
-    referralPayouts: [],
-    auditLogs: [],
-  };
-}
-
-let cachedDb: DatabaseState | null = null;
-let writeQueue: Promise<void> = Promise.resolve();
-
-function ensureLoaded(): DatabaseState {
-  if (cachedDb) return cachedDb;
-  fs.mkdirSync(DB_DIR, {recursive: true});
-  if (!fs.existsSync(DB_PATH)) {
-    cachedDb = createEmptyDatabase();
-    fs.writeFileSync(DB_PATH, JSON.stringify(cachedDb, null, 2), 'utf8');
-    return cachedDb;
-  }
-
-  const raw = fs.readFileSync(DB_PATH, 'utf8');
-  const parsed = JSON.parse(raw) as Partial<DatabaseState>;
-  let migrated = false;
-
-  if (!Array.isArray(parsed.raffles)) {
-    parsed.raffles = [];
-    migrated = true;
-  }
-  if (!Array.isArray(parsed.reservations)) {
-    parsed.reservations = [];
-    migrated = true;
-  }
-  if (!Array.isArray(parsed.referralCodes)) {
-    parsed.referralCodes = [];
-    migrated = true;
-  } else {
-    parsed.referralCodes = parsed.referralCodes.map((ref) => {
-      if (!Array.isArray(ref.liveLinks)) {
-        migrated = true;
-        return {
-          ...ref,
-          liveLinks: [],
-          isLive: false,
-        };
-      }
-      return ref;
-    });
-  }
-  if (!Array.isArray(parsed.referralAlerts)) {
-    parsed.referralAlerts = [];
-    migrated = true;
-  }
-  if (!Array.isArray(parsed.referralPayouts)) {
-    parsed.referralPayouts = [];
-    migrated = true;
-  }
-  if (!Array.isArray(parsed.auditLogs)) {
-    parsed.auditLogs = [];
-    migrated = true;
-  }
-
-  cachedDb = {
-    raffles: parsed.raffles,
-    reservations: parsed.reservations,
-    referralCodes: parsed.referralCodes,
-    referralAlerts: parsed.referralAlerts,
-    referralPayouts: parsed.referralPayouts,
-    auditLogs: parsed.auditLogs,
-  };
-
-  if (migrated) {
-    persistSync(cachedDb);
-  }
-  return cachedDb;
-}
-
-function persistSync(db: DatabaseState): void {
-  fs.mkdirSync(DB_DIR, {recursive: true});
-  const tmpPath = `${DB_PATH}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(db, null, 2), 'utf8');
-  fs.renameSync(tmpPath, DB_PATH);
-}
-
-export function withDbTransaction<T>(fn: (db: DatabaseState) => T): Promise<T> {
-  const run = writeQueue.then(() => {
-    const db = ensureLoaded();
-    const result = fn(db);
-    persistSync(db);
-    return result;
-  });
-  writeQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
-
-export function readDbSnapshot(): DatabaseState {
-  return ensureLoaded();
-}
-
-export function resetCachedDbForCleanState(): void {
-  cachedDb = createEmptyDatabase();
-  persistSync(cachedDb);
-}
 
 export function isReservationHoldingNumbers(
   res: StoredReservation,
