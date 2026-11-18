@@ -90,3 +90,24 @@
 .themed-scroll::-webkit-scrollbar-thumb {
   border-width: 0;
 }
+
+/* Faixa de parceiros ao vivo (página do sorteio): rolagem contínua em loop. */
+@keyframes partner-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.partner-marquee {
+  animation: partner-marquee linear infinite;
+}
+.partner-marquee:hover,
+.partner-marquee:focus-within {
+  animation-play-state: paused;
+}
+.partner-marquee-mask {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}

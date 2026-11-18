@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {ExternalLink, Radio} from 'lucide-react';
 import {LivePlatformName, PublicLivePartner} from '../data/raffles';
 
@@ -143,5 +143,115 @@ export function PartnerLivesBar({partners}: PartnerLivesBarProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Versão compacta para o topo da página do sorteio: fotos dos parceiros ao vivo
+ * com nome e cupom. Se não couber na largura, rola sozinha em loop (pausa no hover).
+ */
+export function PartnerLivesTicker({partners}: {partners: PublicLivePartner[]}) {
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const track = trackRef.current;
+    if (!container || !track) return;
+    const measure = () => {
+      // Mede só a primeira cópia da lista (metade do trilho quando já duplicado).
+      const singleWidth = overflowing ? track.scrollWidth / 2 : track.scrollWidth;
+      // Sem rolagem, o selo "Ao vivo" fica dentro da área: desconta a largura dele.
+      const labelWidth = overflowing ? 0 : (labelRef.current?.offsetWidth ?? 0) + 12;
+      setOverflowing(singleWidth > container.clientWidth - labelWidth + 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [partners, overflowing]);
+
+  if (partners.length === 0) return null;
+
+  const renderPartner = (partner: PublicLivePartner, copy: number) => {
+    const primaryUrl = partner.platforms[0]?.url || '#';
+    const showFallback = !partner.avatarUrl || failedImages[partner.id];
+    return (
+      <a
+        key={`${partner.id}-${copy}`}
+        href={primaryUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-hidden={copy > 0 ? true : undefined}
+        tabIndex={copy > 0 ? -1 : undefined}
+        aria-label={copy === 0 ? `Assistir live de ${partner.promoterName}` : undefined}
+        className="group flex shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
+      >
+        <span className="relative block shrink-0">
+          <span className="block h-10 w-10 overflow-hidden rounded-full border-2 border-red-500 bg-[#1A1625] p-0.5 ring-2 ring-red-500/25 transition-transform duration-200 group-hover:scale-105">
+            {showFallback ? (
+              <span className="flex h-full w-full items-center justify-center rounded-full bg-[#241E33] font-display text-sm font-bold text-white">
+                {getInitials(partner.promoterName)}
+              </span>
+            ) : (
+              <img
+                src={partner.avatarUrl!}
+                alt=""
+                referrerPolicy="no-referrer"
+                onError={() => setFailedImages((prev) => ({...prev, [partner.id]: true}))}
+                className="h-full w-full rounded-full object-cover"
+              />
+            )}
+          </span>
+          <span className="absolute -bottom-1 -right-1.5 rounded-full border-2 border-[#0B0A10] bg-red-600 px-1.5 py-px text-[8px] font-bold uppercase leading-none text-white">
+            Live
+          </span>
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="block max-w-[140px] truncate text-xs font-semibold text-white">
+            {partner.promoterName}
+          </span>
+          <span className="block font-mono text-[10px] font-semibold text-[#FFD166]">
+            {partner.code}
+          </span>
+        </span>
+      </a>
+    );
+  };
+
+  const liveLabel = (
+    <span
+      ref={labelRef}
+      className="hidden shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-red-400 md:inline-flex"
+    >
+      <Radio className="h-3.5 w-3.5" aria-hidden="true" />
+      Ao vivo
+    </span>
+  );
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3" aria-label="Lives Parceiras">
+      {overflowing && liveLabel}
+      <div
+        ref={containerRef}
+        className={`relative flex min-w-0 flex-1 items-center gap-3 overflow-hidden ${
+          overflowing ? 'partner-marquee-mask' : 'justify-end'
+        }`}
+      >
+        {!overflowing && liveLabel}
+        <div
+          ref={trackRef}
+          className={`flex w-max shrink-0 items-center gap-2 ${overflowing ? 'partner-marquee pr-2' : ''}`}
+          style={overflowing ? {animationDuration: `${Math.max(12, partners.length * 6)}s`} : undefined}
+        >
+          {partners.map((p) => renderPartner(p, 0))}
+          {overflowing && partners.map((p) => renderPartner(p, 1))}
+        </div>
+      </div>
+    </div>
   );
 }

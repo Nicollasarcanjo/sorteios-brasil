@@ -233,6 +233,7 @@ export default function App() {
           onSelectOtherRaffle={navigateToRaffle}
           onReservationCreated={handleReservationCreated}
           onOpenMyTickets={() => setTicketsDrawerOpen(true)}
+          livePartners={livePartners}
         />
       ) : (
         <main>

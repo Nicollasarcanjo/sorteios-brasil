@@ -16,6 +16,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import {
+  PublicLivePartner,
   RaffleItem,
   UserReservation,
   formatBRL,
@@ -29,6 +30,7 @@ import {
 } from '../../shared/social.ts';
 import {MediaFrame} from './MediaFrame';
 import {WinnerProfile} from './WinnerProfile';
+import {PartnerLivesTicker} from './PartnerLivesBar';
 import {TicketChips} from './TicketChips';
 import {CountdownTimer} from './CountdownTimer';
 
@@ -40,6 +42,8 @@ interface RaffleDetailPageProps {
   onSelectOtherRaffle: (slug: string) => void;
   onReservationCreated: (reservation: UserReservation, updatedRaffle?: RaffleItem | null) => void;
   onOpenMyTickets: () => void;
+  /** Parceiros ao vivo, exibidos no topo da página (mesma lista da home). */
+  livePartners?: PublicLivePartner[];
 }
 
 function formatCpfInput(value: string): string {
@@ -68,6 +72,7 @@ export function RaffleDetailPage({
   onSelectOtherRaffle,
   onReservationCreated,
   onOpenMyTickets,
+  livePartners = [],
 }: RaffleDetailPageProps) {
   const unavailableSet = useMemo(() => new Set(raffle.soldNumbers), [raffle.soldNumbers]);
 
@@ -486,13 +491,7 @@ export function RaffleDetailPage({
           <span>Voltar para a Galeria</span>
         </button>
 
-        <div className="hidden sm:flex items-center gap-2 text-xs text-[#958FA8]">
-          <span>{raffle.categoryLabel}</span>
-          <span aria-hidden="true">·</span>
-          <span>{raffle.region}</span>
-          <span aria-hidden="true">·</span>
-          <span>Sorteio {raffle.drawDate}</span>
-        </div>
+        <PartnerLivesTicker partners={livePartners} />
       </div>
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-start">
