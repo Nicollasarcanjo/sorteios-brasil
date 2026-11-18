@@ -3,6 +3,7 @@ import {sanitizeText} from './security.ts';
 import {TARGET_PROFIT_RATE, buildRafflePricing, parseProfitPct} from './store.ts';
 import type {PoolTier, ProductBreakdownItem, RaffleCategory, StoredRaffle} from './types.ts';
 import {resolveCategory} from '../shared/categories.ts';
+import {MAX_TOTAL_TICKETS, MIN_TOTAL_TICKETS} from '../shared/limits.ts';
 
 /**
  * Validação + montagem de um novo sorteio.
@@ -83,8 +84,8 @@ export function parseRaffleInput(
   if (title.length < 4 || subtitle.length < 6) {
     return {ok: false, error: 'Título e subtítulo são obrigatórios.'};
   }
-  if (!Number.isInteger(totalTickets) || totalTickets < 10 || totalTickets > 20000) {
-    return {ok: false, error: 'Quantidade de cotas deve ser entre 10 e 20.000.'};
+  if (!Number.isInteger(totalTickets) || totalTickets < MIN_TOTAL_TICKETS || totalTickets > MAX_TOTAL_TICKETS) {
+    return {ok: false, error: 'Informe uma quantidade de cotas válida.'};
   }
   if (!Number.isInteger(minTicketsRaw) || minTicketsRaw < 1 || minTicketsRaw > totalTickets) {
     return {ok: false, error: `A compra mínima deve ser entre 1 e ${totalTickets} cotas.`};

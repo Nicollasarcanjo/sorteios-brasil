@@ -38,3 +38,55 @@
 .vice-sunset-bar {
   background: linear-gradient(90deg, #ff4e8e 0%, #ff8c42 60%, #ffd166 100%);
 }
+
+/* Barras de rolagem no tema (pôr do sol rosa → laranja sobre fundo escuro). */
+@layer base {
+  /* Firefox (sem ::-webkit-scrollbar). No Chrome, scrollbar-color anularia o degradê abaixo. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #ff4e8e #14111d;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0b0a10;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ff4e8e 0%, #ff8c42 60%, #ffd166 100%);
+    border-radius: 999px;
+    border: 2px solid #0b0a10;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff6aa1 0%, #ffa060 60%, #ffdc85 100%);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: #0b0a10;
+  }
+}
+
+/* Áreas internas com rolagem (listas de cotas, modais): trilho um pouco mais claro e barra fina. */
+@supports not selector(::-webkit-scrollbar) {
+  .themed-scroll {
+    scrollbar-color: #ff4e8e transparent;
+  }
+}
+.themed-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.themed-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+}
+.themed-scroll::-webkit-scrollbar-thumb {
+  border-width: 0;
+}

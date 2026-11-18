@@ -29,6 +29,7 @@ import {
 } from '../../shared/social.ts';
 import {MediaFrame} from './MediaFrame';
 import {WinnerProfile} from './WinnerProfile';
+import {TicketChips} from './TicketChips';
 import {CountdownTimer} from './CountdownTimer';
 
 interface RaffleDetailPageProps {
@@ -184,20 +185,32 @@ export function RaffleDetailPage({
   };
 
   const pickAvailableRandoms = (qty: number, excludeSet: Set<number>): number[] => {
-    const availablePool: number[] = [];
-    for (let i = 1; i <= raffle.totalTickets; i++) {
-      if (!unavailableSet.has(i) && !excludeSet.has(i)) {
-        availablePool.push(i);
+    const total = raffle.totalTickets;
+    const isBlocked = (n: number) => unavailableSet.has(n) || excludeSet.has(n);
+    const blockedEstimate = unavailableSet.size + excludeSet.size;
+
+    // Sorteios grandes com poucas cotas ocupadas: sorteia direto, sem montar a lista
+    // inteira (funciona com milhões de cotas).
+    if (blockedEstimate + qty * 2 < total / 2) {
+      const picked = new Set<number>();
+      while (picked.size < qty) {
+        const n = 1 + Math.floor(Math.random() * total);
+        if (!isBlocked(n)) picked.add(n);
       }
+      return [...picked];
     }
-    const picked: number[] = [];
-    const countToPick = Math.min(qty, availablePool.length);
+
+    // Caso geral: lista das livres + Fisher-Yates parcial (troca com o fim, sem splice).
+    const pool: number[] = [];
+    for (let i = 1; i <= total; i++) {
+      if (!isBlocked(i)) pool.push(i);
+    }
+    const countToPick = Math.min(qty, pool.length);
     for (let i = 0; i < countToPick; i++) {
-      const randIdx = Math.floor(Math.random() * availablePool.length);
-      picked.push(availablePool[randIdx]);
-      availablePool.splice(randIdx, 1);
+      const j = i + Math.floor(Math.random() * (pool.length - i));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    return picked;
+    return pool.slice(0, countToPick);
   };
 
   const addRandomNumbers = (qty: number) => {
@@ -301,6 +314,17 @@ export function RaffleDetailPage({
       setActiveReservation(initialPendingReservation);
     }
   }, [activeReservation, initialPendingReservation]);
+
+  // Assim que a cobrança PIX aparece, rola a tela até ela (QR + copia e cola sempre à vista).
+  const pendingPixId =
+    activeReservation?.status === 'pending_payment' ? activeReservation.id : null;
+  useEffect(() => {
+    if (!pendingPixId) return;
+    const t = window.setTimeout(() => {
+      document.getElementById('pix-payment')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [pendingPixId]);
 
   useEffect(() => {
     if (
@@ -663,15 +687,14 @@ export function RaffleDetailPage({
                         )}
                       </p>
 
-                      <div className="mt-4 flex flex-wrap gap-1.5">
-                        {activeReservation.numbers.map((num) => (
-                          <span
-                            key={num}
-                            className="rounded border border-[#FF4E8E]/40 bg-[#FF4E8E]/15 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-white"
-                          >
-                            {padTicketNumber(num, raffle.totalTickets)}
-                          </span>
-                        ))}
+                      <div className="mt-4">
+                        <TicketChips
+                          numbers={activeReservation.numbers}
+                          format={(num) => padTicketNumber(num, raffle.totalTickets)}
+                          label="Suas cotas"
+                          maxHeightClass="max-h-48"
+                          chipClassName="rounded border border-[#FF4E8E]/40 bg-[#FF4E8E]/15 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-white"
+                        />
                       </div>
 
                       <div className="mt-5 flex flex-wrap gap-3">
@@ -724,7 +747,7 @@ export function RaffleDetailPage({
                       </button>
                     </div>
                   ) : (
-                    <div className="mt-6 rounded-xl border border-[#FF4E8E]/40 bg-[#0B0A10] p-5">
+                    <div id="pix-payment" className="mt-6 scroll-mt-20 rounded-xl border border-[#FF4E8E]/40 bg-[#0B0A10] p-5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 text-[#FFD166]">
                           <Clock className="h-5 w-5 shrink-0" aria-hidden="true" />
@@ -757,17 +780,6 @@ export function RaffleDetailPage({
                         </strong>
                         . Suas {activeReservation.numbers.length} cota(s) confirmam automaticamente nesta tela assim que o PIX compensar.
                       </p>
-
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {activeReservation.numbers.map((num) => (
-                          <span
-                            key={num}
-                            className="rounded border border-white/15 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] tabular-nums text-[#D6D1E2]"
-                          >
-                            {padTicketNumber(num, raffle.totalTickets)}
-                          </span>
-                        ))}
-                      </div>
 
                       {activeReservation.paymentBrCodeBase64 && (
                         <div className="mt-4 flex justify-center">
@@ -805,6 +817,16 @@ export function RaffleDetailPage({
                           </p>
                         </div>
                       )}
+
+                      <div className="mt-4">
+                        <TicketChips
+                          numbers={activeReservation.numbers}
+                          format={(num) => padTicketNumber(num, raffle.totalTickets)}
+                          label="Cotas reservadas"
+                          maxHeightClass="max-h-32"
+                          chipClassName="rounded border border-white/15 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] tabular-nums text-[#D6D1E2]"
+                        />
+                      </div>
 
                       {paymentActionMessage && (
                         <p className="mt-3 text-xs text-[#FFD166]">{paymentActionMessage}</p>

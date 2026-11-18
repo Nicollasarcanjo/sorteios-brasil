@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="sunset" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF4E8E"/>
+      <stop offset="0.55" stop-color="#FF8C42"/>
+      <stop offset="1" stop-color="#FFD166"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#14111D"/>
+  <!-- alças -->
+  <path d="M19 17h-6a2 2 0 0 0-2 2v3c0 6 4.5 10.5 10.5 11" fill="none" stroke="url(#sunset)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M45 17h6a2 2 0 0 1 2 2v3c0 6-4.5 10.5-10.5 11" fill="none" stroke="url(#sunset)" stroke-width="4" stroke-linecap="round"/>
+  <!-- taça -->
+  <path d="M18 12h28v12c0 8.3-6.3 15-14 15s-14-6.7-14-15V12z" fill="url(#sunset)"/>
+  <!-- haste e base -->
+  <rect x="28.5" y="38" width="7" height="8" fill="url(#sunset)"/>
+  <rect x="21" y="46" width="22" height="6" rx="2" fill="url(#sunset)"/>
+  <!-- brilho -->
+  <path d="M24 16v7c0 3 1.2 5.6 3 7.4" fill="none" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

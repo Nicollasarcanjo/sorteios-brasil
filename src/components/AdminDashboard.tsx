@@ -45,6 +45,7 @@ import {
   padTicketNumber,
 } from '../data/raffles';
 import {DEFAULT_CATEGORIES, type CategoryOption} from '../../shared/categories.ts';
+import {MAX_TOTAL_TICKETS, MIN_TOTAL_TICKETS} from '../../shared/limits.ts';
 
 interface AdminDashboardProps {
   onBackToSite: () => void;
@@ -1027,10 +1028,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
   const formPricingError =
     formState.pricingMode === 'price' && formState.desiredTicketPrice <= ABACATEPAY_PIX_FEE_BRL
       ? 'O valor da cota precisa ser maior que a taxa do PIX (R$ 0,80).'
-      : formTotalTickets < 10
-        ? 'Com esses valores ficariam menos de 10 cotas. Diminua o valor da cota ou aumente o lucro.'
-        : formTotalTickets > 20000
-          ? 'Com esses valores ficariam mais de 20.000 cotas. Aumente o valor da cota.'
+      : formTotalTickets < MIN_TOTAL_TICKETS
+        ? 'Informe a quantidade de cotas.'
+        : formTotalTickets > MAX_TOTAL_TICKETS
+          ? `O máximo técnico é ${MAX_TOTAL_TICKETS.toLocaleString('pt-BR')} cotas por sorteio.`
           : null;
   // Compra mínima em cotas (no modo valor: arredonda para cima para cobrir o valor pedido).
   const formMinTickets =
@@ -2817,8 +2818,8 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                           <input
                             id="totalTickets"
                             type="number"
-                            min={10}
-                            max={20000}
+                            min={MIN_TOTAL_TICKETS}
+                            max={MAX_TOTAL_TICKETS}
                             required
                             value={formState.totalTickets}
                             onChange={(e) =>

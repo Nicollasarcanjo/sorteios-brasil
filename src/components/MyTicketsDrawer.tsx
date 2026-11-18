@@ -1,6 +1,7 @@
 import React, {useState} from 'react';
 import {X, Ticket, ArrowRight, ShieldCheck, Clock, Copy, Check} from 'lucide-react';
 import {UserReservation, formatBRL} from '../data/raffles';
+import {TicketChips} from './TicketChips';
 
 interface MyTicketsDrawerProps {
   isOpen: boolean;
@@ -124,21 +125,20 @@ export function MyTicketsDrawer({
                       )}
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {res.numbers.map((num) => (
-                        <span
-                          key={num}
-                          className={`rounded border px-2 py-0.5 font-mono text-xs font-medium tabular-nums ${
-                            isPending
-                              ? 'border-[#FFD166]/40 bg-[#FFD166]/10 text-[#FFE4A0]'
-                              : isExpired || isCancelled
-                                ? 'border-white/15 bg-white/[0.04] text-[#958FA8] line-through'
-                                : 'border-[#FF4E8E]/35 bg-[#FF4E8E]/10 text-[#FFD0E3]'
-                          }`}
-                        >
-                          {String(num).padStart(4, '0')}
-                        </span>
-                      ))}
+                    <div className="mt-3">
+                      <TicketChips
+                        numbers={res.numbers}
+                        format={(num) => String(num).padStart(4, '0')}
+                        maxHeightClass="max-h-36"
+                        maxRendered={5000}
+                        chipClassName={`rounded border px-2 py-0.5 font-mono text-xs font-medium tabular-nums ${
+                          isPending
+                            ? 'border-[#FFD166]/40 bg-[#FFD166]/10 text-[#FFE4A0]'
+                            : isExpired || isCancelled
+                              ? 'border-white/15 bg-white/[0.04] text-[#958FA8] line-through'
+                              : 'border-[#FF4E8E]/35 bg-[#FF4E8E]/10 text-[#FFD0E3]'
+                        }`}
+                      />
                     </div>
 
                     {isPending && res.paymentBrCode && (

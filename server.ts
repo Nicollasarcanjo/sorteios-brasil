@@ -62,6 +62,7 @@ import {
   socialProfileUrl,
 } from './shared/social.ts';
 import {mergeCategories, resolveCategory} from './shared/categories.ts';
+import {MAX_TOTAL_TICKETS, MIN_TOTAL_TICKETS} from './shared/limits.ts';
 import type {
   ProductBreakdownItem,
   ReferralPayoutRecord,
@@ -131,8 +132,8 @@ async function startServer() {
   }
 
   // Strict payload size bound (Denial-of-Wallet / DoS guard)
-  // 256kb comporta uma reserva com até 20.000 números.
-  app.use(express.json({limit: '256kb'}));
+  // 10mb comporta uma reserva com até 1.000.000 de números.
+  app.use(express.json({limit: '10mb'}));
 
   // Security headers (preserve iframe embedding in AI Studio preview)
   app.use((_req, res, next) => {
@@ -288,9 +289,9 @@ async function startServer() {
       res.status(400).json({error: 'Informe um CPF válido (necessário para emissão do PIX AbacatePay).'});
       return;
     }
-    // Sem teto fixo por compra: o limite real é o total de cotas do sorteio (máx. 20.000),
+    // Sem teto fixo por compra: o limite real é o total de cotas do sorteio,
     // e o mínimo é o configurado no sorteio (checado na transação abaixo).
-    if (!Array.isArray(rawNumbers) || rawNumbers.length === 0 || rawNumbers.length > 20000) {
+    if (!Array.isArray(rawNumbers) || rawNumbers.length === 0 || rawNumbers.length > MAX_TOTAL_TICKETS) {
       res.status(400).json({error: 'Selecione pelo menos 1 cota.'});
       return;
     }
@@ -1082,7 +1083,7 @@ async function startServer() {
             },
           };
         }
-        if (body.totalTickets >= 10 && body.totalTickets <= 20000) {
+        if (body.totalTickets >= MIN_TOTAL_TICKETS && body.totalTickets <= MAX_TOTAL_TICKETS) {
           raffle.totalTickets = body.totalTickets;
         }
       }
