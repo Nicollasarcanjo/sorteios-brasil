@@ -171,6 +171,10 @@ export function toPublicRaffleProjection(
           winningNumber: raffle.winner.winningNumber,
           buyerDisplayName: maskBuyerDisplayName(raffle.winner.buyerName),
           declaredAt: raffle.winner.declaredAt,
+          socialPlatform: raffle.winner.socialPlatform ?? null,
+          socialHandle: raffle.winner.socialHandle ?? null,
+          socialUrl: raffle.winner.socialUrl ?? null,
+          avatarUrl: raffle.winner.avatarUrl ?? null,
         }
       : null,
   };

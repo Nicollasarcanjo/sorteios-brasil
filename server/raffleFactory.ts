@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import {sanitizeText} from './security.ts';
 import {TARGET_PROFIT_RATE, buildRafflePricing, parseProfitPct} from './store.ts';
 import type {PoolTier, ProductBreakdownItem, RaffleCategory, StoredRaffle} from './types.ts';
+import {resolveCategory} from '../shared/categories.ts';
 
 /**
  * Validação + montagem de um novo sorteio.
@@ -15,6 +16,7 @@ export interface RaffleInput {
   subtitle: string;
   region: string;
   category: RaffleCategory;
+  categoryLabel: string;
   poolTier: PoolTier;
   totalTickets: number;
   /** Lucro sobre o valor dos prêmios (0 a 2 = 0% a 200%). */
@@ -40,7 +42,15 @@ export function parseRaffleInput(
   const shortTitle = sanitizeText(body.shortTitle, 60) || title.slice(0, 40);
   const subtitle = sanitizeText(body.subtitle, 240);
   const region = sanitizeText(body.region, 60) || 'Vice City';
-  const category: RaffleCategory = body.category === 'gta6-ps5' ? 'gta6-ps5' : 'gta6';
+  const resolvedCategory = resolveCategory({
+    category: body.category,
+    categoryLabel: typeof body.categoryLabel === 'string' ? sanitizeText(body.categoryLabel, 60) : undefined,
+  });
+  if (!resolvedCategory) {
+    return {ok: false, error: 'Escolha ou crie uma categoria (mínimo 2 caracteres).'};
+  }
+  const category: RaffleCategory = resolvedCategory.id;
+  const categoryLabel = resolvedCategory.label;
   const poolTier: PoolTier = body.poolTier === 'exclusive' ? 'exclusive' : 'popular';
   const totalTickets = Number(body.totalTickets);
   const targetProfitRate = parseProfitPct(body.profitPct) ?? TARGET_PROFIT_RATE;
@@ -85,6 +95,7 @@ export function parseRaffleInput(
       subtitle,
       region,
       category,
+      categoryLabel,
       poolTier,
       totalTickets,
       targetProfitRate,
@@ -121,7 +132,7 @@ export function buildNewRaffle(input: RaffleInput): StoredRaffle {
     subtitle: input.subtitle,
     region: input.region,
     category: input.category,
-    categoryLabel: input.category === 'gta6-ps5' ? 'GTA VI + PS5' : 'Somente GTA VI',
+    categoryLabel: input.categoryLabel,
     poolTier: input.poolTier,
     poolLabel:
       input.poolTier === 'exclusive' ? 'Menos Pessoas · Alta Chance' : 'Mais Gente · Valor Menor',

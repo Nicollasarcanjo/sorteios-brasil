@@ -158,12 +158,24 @@ export default function App() {
     [reservations],
   );
 
+  /** Filtros de categoria: só as categorias que têm sorteio publicado. */
+  const galleryCategories = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of raffles) {
+      if (!seen.has(r.category)) seen.set(r.category, r.categoryLabel);
+    }
+    return [...seen].map(([id, label]) => ({id, label}));
+  }, [raffles]);
+
   const filteredRaffles = useMemo(() => {
-    return raffles.filter((item) => {
-      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
-      if (tierFilter !== 'all' && item.poolTier !== tierFilter) return false;
-      return true;
-    });
+    return raffles
+      .filter((item) => {
+        if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+        if (tierFilter !== 'all' && item.poolTier !== tierFilter) return false;
+        return true;
+      })
+      // Ativos primeiro; finalizados (com resultado) no fim da galeria.
+      .sort((a, b) => Number(a.status === 'finalized') - Number(b.status === 'finalized'));
   }, [raffles, categoryFilter, tierFilter]);
 
   const handleReservationCreated = useCallback(
@@ -279,13 +291,7 @@ export default function App() {
                   role="group"
                   aria-label="Filtrar por prêmio"
                 >
-                  {(
-                    [
-                      {id: 'all', label: 'Todos'},
-                      {id: 'gta6', label: 'Somente GTA VI'},
-                      {id: 'gta6-ps5', label: 'GTA VI + PS5'},
-                    ] as const
-                  ).map((tab) => (
+                  {[{id: 'all', label: 'Todos'}, ...galleryCategories].map((tab) => (
                     <button
                       key={tab.id}
                       type="button"

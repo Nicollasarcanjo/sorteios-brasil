@@ -21,7 +21,14 @@ import {
   formatBRL,
   padTicketNumber,
 } from '../data/raffles';
+import {
+  SOCIAL_PLATFORMS,
+  type SocialPlatform,
+  normalizeSocialHandle,
+  socialPlatformLabel,
+} from '../../shared/social.ts';
 import {MediaFrame} from './MediaFrame';
+import {WinnerProfile} from './WinnerProfile';
 import {CountdownTimer} from './CountdownTimer';
 
 interface RaffleDetailPageProps {
@@ -73,6 +80,8 @@ export function RaffleDetailPage({
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buyerTaxId, setBuyerTaxId] = useState('');
+  const [buyerSocialPlatform, setBuyerSocialPlatform] = useState<SocialPlatform>('instagram');
+  const [buyerSocialHandle, setBuyerSocialHandle] = useState('');
   const [referralInput, setReferralInput] = useState('');
   const [appliedReferral, setAppliedReferral] = useState<{
     code: string;
@@ -364,6 +373,12 @@ export function RaffleDetailPage({
       setFormError('Informe um WhatsApp ou celular válido com DDD.');
       return;
     }
+    if (!normalizeSocialHandle(buyerSocialPlatform, buyerSocialHandle)) {
+      setFormError(
+        `Informe um @ válido do seu ${socialPlatformLabel(buyerSocialPlatform)} (ex.: @seuusuario).`,
+      );
+      return;
+    }
     if (buyerTaxId.replace(/\D/g, '').length !== 11) {
       setFormError('Informe seu CPF com 11 dígitos para gerar o PIX.');
       return;
@@ -395,6 +410,8 @@ export function RaffleDetailPage({
           buyerEmail: buyerEmail.trim(),
           buyerPhone: buyerPhone.trim(),
           buyerTaxId: buyerTaxId.trim(),
+          buyerSocialPlatform,
+          buyerSocialHandle: normalizeSocialHandle(buyerSocialPlatform, buyerSocialHandle) ?? '',
           applyOrderBump: activeBumpCount > 0,
           ...(referralToSend ? {referralCode: referralToSend} : {}),
         }),
@@ -551,15 +568,13 @@ export function RaffleDetailPage({
                   </h2>
                 </div>
                 {raffle.winner ? (
-                  <div className="mt-3 space-y-2 text-sm text-[#E2DCEB]">
+                  <div className="mt-4 space-y-4 text-sm text-[#E2DCEB]">
+                    <WinnerProfile winner={raffle.winner} />
                     <p>
                       Número contemplado:{' '}
                       <span className="font-mono text-lg font-bold text-[#FFD166]">
                         #{padTicketNumber(raffle.winner.winningNumber, raffle.totalTickets)}
                       </span>
-                    </p>
-                    <p>
-                      Participante: <strong className="text-white">{raffle.winner.buyerDisplayName}</strong>
                     </p>
                     <p className="text-xs text-[#A59FB8]">
                       Declarado em {new Date(raffle.winner.declaredAt).toLocaleString('pt-BR')}
@@ -1139,6 +1154,52 @@ export function RaffleDetailPage({
                                 className="min-h-[42px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 font-mono text-sm text-white placeholder:font-sans placeholder:text-[#7D7692] focus:border-[#FF4E8E] focus:outline-none"
                               />
                             </div>
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="buyer-social"
+                              className="mb-1 block text-xs font-medium text-[#C6C0D4]"
+                            >
+                              Sua rede social
+                            </label>
+                            <div className="flex gap-2">
+                              <select
+                                aria-label="Rede social"
+                                value={buyerSocialPlatform}
+                                onChange={(e) => setBuyerSocialPlatform(e.target.value as SocialPlatform)}
+                                className="min-h-[42px] shrink-0 rounded-lg border border-white/15 bg-[#0B0A10] px-2.5 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                              >
+                                {SOCIAL_PLATFORMS.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="relative min-w-0 flex-1">
+                                <span
+                                  aria-hidden="true"
+                                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#7D7692]"
+                                >
+                                  @
+                                </span>
+                                <input
+                                  id="buyer-social"
+                                  type="text"
+                                  required
+                                  autoCapitalize="none"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  value={buyerSocialHandle}
+                                  onChange={(e) => setBuyerSocialHandle(e.target.value.replace(/^@+/, ''))}
+                                  placeholder="seuusuario"
+                                  className="min-h-[42px] w-full rounded-lg border border-white/15 bg-[#0B0A10] pl-7 pr-3 text-sm text-white placeholder:text-[#7D7692] focus:border-[#FF4E8E] focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                            <p className="mt-1 text-[11px] leading-relaxed text-[#958FA8]">
+                              Se você ganhar, seu nome, sua foto de perfil e seu @ aparecem na página do sorteio.
+                            </p>
                           </div>
 
                           <div>

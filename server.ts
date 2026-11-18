@@ -53,6 +53,13 @@ import {
   resolvePartnerAvatarFromLinks,
 } from './server/liveResolver.ts';
 import {buildNewRaffle, parseRaffleInput} from './server/raffleFactory.ts';
+import {
+  isSocialPlatform,
+  normalizeSocialHandle,
+  socialAvatarUrl,
+  socialProfileUrl,
+} from './shared/social.ts';
+import {mergeCategories, resolveCategory} from './shared/categories.ts';
 import type {
   ProductBreakdownItem,
   ReferralPayoutRecord,
@@ -224,6 +231,8 @@ async function startServer() {
       'buyerPhone',
       'buyerTaxId',
       'buyerContact',
+      'buyerSocialPlatform',
+      'buyerSocialHandle',
       'applyOrderBump',
       'referralCode',
     ]);
@@ -239,6 +248,12 @@ async function startServer() {
     const buyerEmail = sanitizeText(body.buyerEmail, 120).toLowerCase();
     const buyerPhone = sanitizeText(body.buyerPhone || body.buyerContact, 40);
     const buyerTaxIdRaw = sanitizeText(body.buyerTaxId, 20);
+    const buyerSocialPlatform = isSocialPlatform(body.buyerSocialPlatform)
+      ? body.buyerSocialPlatform
+      : null;
+    const buyerSocialHandle = buyerSocialPlatform
+      ? normalizeSocialHandle(buyerSocialPlatform, sanitizeText(body.buyerSocialHandle, 200))
+      : null;
     const applyOrderBump = body.applyOrderBump === true;
     const referralCodeInput = sanitizeText(body.referralCode, 24).toUpperCase();
     const rawNumbers = body.numbers;
@@ -257,6 +272,12 @@ async function startServer() {
     }
     if (buyerPhone.replace(/\D/g, '').length < 10) {
       res.status(400).json({error: 'Informe um WhatsApp/celular válido com DDD.'});
+      return;
+    }
+    if (!buyerSocialPlatform || !buyerSocialHandle) {
+      res.status(400).json({
+        error: 'Informe sua rede social (Instagram, TikTok, X ou Facebook) com um @ válido.',
+      });
       return;
     }
     if (!isValidBrazilianCpf(buyerTaxIdRaw)) {
@@ -390,6 +411,8 @@ async function startServer() {
           buyerEmail,
           buyerPhone,
           buyerTaxIdMasked: maskCpf(buyerTaxIdRaw),
+          buyerSocialPlatform,
+          buyerSocialHandle,
           orderBumpApplied: bonusNumbers.length > 0,
           ...(matchedReferral
             ? {
@@ -992,9 +1015,16 @@ async function startServer() {
       if (typeof body.description === 'string' && sanitizeText(body.description, 600).length >= 4) {
         raffle.description = sanitizeText(body.description, 600);
       }
-      if (body.category === 'gta6' || body.category === 'gta6-ps5') {
-        raffle.category = body.category;
-        raffle.categoryLabel = body.category === 'gta6-ps5' ? 'GTA VI + PS5' : 'Somente GTA VI';
+      if (body.categoryLabel !== undefined || body.category !== undefined) {
+        const resolved = resolveCategory({
+          category: body.category,
+          categoryLabel:
+            typeof body.categoryLabel === 'string' ? sanitizeText(body.categoryLabel, 60) : undefined,
+        });
+        if (resolved) {
+          raffle.category = resolved.id;
+          raffle.categoryLabel = resolved.label;
+        }
       }
       if (body.poolTier === 'popular' || body.poolTier === 'exclusive') {
         raffle.poolTier = body.poolTier;
@@ -1233,6 +1263,21 @@ async function startServer() {
         declaredAt: new Date().toISOString(),
         declaredBy: adminSession?.email || 'admin',
         selectionMode,
+        ...(matchingReservation.buyerSocialPlatform && matchingReservation.buyerSocialHandle
+          ? {
+              socialPlatform: matchingReservation.buyerSocialPlatform,
+              socialHandle: matchingReservation.buyerSocialHandle,
+              socialUrl: socialProfileUrl(
+                matchingReservation.buyerSocialPlatform,
+                matchingReservation.buyerSocialHandle,
+              ),
+              avatarUrl:
+                socialAvatarUrl(
+                  matchingReservation.buyerSocialPlatform,
+                  matchingReservation.buyerSocialHandle,
+                ) ?? undefined,
+            }
+          : {}),
         ...(refCodeUsed
           ? {
               referralCode: refCodeUsed,
@@ -1253,6 +1298,61 @@ async function startServer() {
       );
 
       return {status: 200 as const, payload: {raffle, referralWinnerAlert}};
+    });
+
+    res.status(result.status).json(result.payload);
+  });
+
+  // Catálogo para o formulário do painel: categorias e produtos já usados em sorteios.
+  app.get('/api/admin/catalog', requireAdminMiddleware, (_req, res) => {
+    const db = readDbSnapshot();
+    const byRecent = [...db.raffles].sort(
+      (a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt),
+    );
+    const products = new Map<string, ProductBreakdownItem>();
+    for (const raffle of byRecent) {
+      for (const p of raffle.products) {
+        const key = p.name.trim().toLowerCase();
+        if (key && !products.has(key)) products.set(key, {name: p.name.trim(), retailPrice: p.retailPrice});
+      }
+    }
+    res.json({
+      categories: mergeCategories(db.raffles),
+      products: [...products.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    });
+  });
+
+  // Foto do ganhador definida manualmente (ex.: Instagram, que não tem foto automática).
+  app.patch('/api/admin/raffles/:id/winner-avatar', requireAdminMiddleware, async (req, res) => {
+    const adminSession = (req as express.Request & {adminSession?: {email?: string}}).adminSession;
+    const raffleId = sanitizeText(req.params.id, 64);
+    const body = req.body as Record<string, unknown> | undefined;
+    const rawUrl = sanitizeText(body?.avatarUrl, 1000);
+    const parsedUrl = rawUrl ? isSafePublicHttpUrl(rawUrl) : null;
+    if (rawUrl && (!parsedUrl || parsedUrl.protocol !== 'https:')) {
+      res.status(400).json({error: 'Informe um link https válido para a imagem.'});
+      return;
+    }
+
+    const result = await withDbTransaction((db) => {
+      const raffle = db.raffles.find((r) => r.id === raffleId);
+      if (!raffle?.winner) {
+        return {status: 404 as const, payload: {error: 'Sorteio sem ganhador definido.'}};
+      }
+      if (parsedUrl) {
+        raffle.winner.avatarUrl = parsedUrl.toString();
+      } else {
+        delete raffle.winner.avatarUrl;
+      }
+      raffle.updatedAt = new Date().toISOString();
+      appendAuditLog(
+        db,
+        adminSession?.email || 'admin',
+        'UPDATE_RAFFLE',
+        raffle.id,
+        parsedUrl ? 'Foto do ganhador atualizada.' : 'Foto do ganhador removida.',
+      );
+      return {status: 200 as const, payload: {raffle}};
     });
 
     res.status(result.status).json(result.payload);

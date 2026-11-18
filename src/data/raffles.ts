@@ -1,4 +1,7 @@
-export type RaffleCategory = 'gta6' | 'gta6-ps5';
+import type {SocialPlatform} from '../../shared/social.ts';
+
+/** Id da categoria (livre). Padrões: 'gta6', 'gta6-ps5'. Ver shared/categories.ts. */
+export type RaffleCategory = string;
 export type PoolTier = 'popular' | 'exclusive';
 export type RaffleStatus = 'active' | 'finalized';
 
@@ -11,6 +14,10 @@ export interface RaffleWinnerPublic {
   winningNumber: number;
   buyerDisplayName: string;
   declaredAt: string;
+  socialPlatform?: SocialPlatform | null;
+  socialHandle?: string | null;
+  socialUrl?: string | null;
+  avatarUrl?: string | null;
 }
 
 export const ABACATEPAY_PIX_FEE_BRL = 0.8;
@@ -105,6 +112,10 @@ export interface AdminRaffleRecord extends Omit<RaffleItem, 'soldNumbers' | 'win
     referralPromoterName?: string;
     referralWinnerBonusPct?: number;
     referralWinnerBonusAmount?: number;
+    socialPlatform?: SocialPlatform;
+    socialHandle?: string;
+    socialUrl?: string;
+    avatarUrl?: string;
   } | null;
   createdAt: string;
   updatedAt: string;

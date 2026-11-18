@@ -1,4 +1,7 @@
-export type RaffleCategory = 'gta6' | 'gta6-ps5';
+import type {SocialPlatform} from '../shared/social.ts';
+
+/** Id da categoria (livre). Padrões: 'gta6', 'gta6-ps5'. Ver shared/categories.ts. */
+export type RaffleCategory = string;
 export type PoolTier = 'popular' | 'exclusive';
 export type RaffleStatus = 'active' | 'finalized';
 
@@ -19,6 +22,11 @@ export interface RaffleWinnerInfo {
   referralPromoterName?: string;
   referralWinnerBonusPct?: number;
   referralWinnerBonusAmount?: number;
+  /** Rede social informada pelo ganhador no checkout (exibida publicamente). */
+  socialPlatform?: SocialPlatform;
+  socialHandle?: string;
+  socialUrl?: string;
+  avatarUrl?: string;
 }
 
 export interface StoredRaffle {
@@ -118,6 +126,8 @@ export interface StoredReservation {
   buyerEmail?: string;
   buyerPhone?: string;
   buyerTaxIdMasked?: string;
+  buyerSocialPlatform?: SocialPlatform;
+  buyerSocialHandle?: string;
   orderBumpApplied: boolean;
   referralCode?: string;
   referralPromoterName?: string;
@@ -227,5 +237,9 @@ export interface PublicRaffleProjection {
     winningNumber: number;
     buyerDisplayName: string;
     declaredAt: string;
+    socialPlatform: SocialPlatform | null;
+    socialHandle: string | null;
+    socialUrl: string | null;
+    avatarUrl: string | null;
   } | null;
 }

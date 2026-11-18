@@ -23,11 +23,19 @@ export function RaffleCard({raffle, onSelectRaffle}: RaffleCardProps) {
       <button
         type="button"
         onClick={() => onSelectRaffle(raffle.slug)}
-        className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#FF4E8E]"
+        className="relative block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#FF4E8E]"
       >
-        <MediaFrame src={raffle.image} alt={raffle.title} aspectClass="aspect-[4/3]">
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#151220] via-[#151220]/45 to-transparent" />
-        </MediaFrame>
+        <div className={isFinalized ? 'grayscale opacity-75 transition duration-300 group-hover:opacity-90' : undefined}>
+          <MediaFrame src={raffle.image} alt={raffle.title} aspectClass="aspect-[4/3]">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#151220] via-[#151220]/45 to-transparent" />
+          </MediaFrame>
+        </div>
+        {isFinalized && (
+          <span className="pointer-events-none absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-black/75 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white ring-1 ring-white/20 backdrop-blur">
+            <Award className="h-3.5 w-3.5 text-[#FFD166]" aria-hidden="true" />
+            Finalizado
+          </span>
+        )}
       </button>
 
       <div className="flex flex-1 flex-col justify-between p-6">

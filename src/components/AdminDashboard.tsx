@@ -44,6 +44,7 @@ import {
   formatBRL,
   padTicketNumber,
 } from '../data/raffles';
+import {DEFAULT_CATEGORIES, type CategoryOption} from '../../shared/categories.ts';
 
 interface AdminDashboardProps {
   onBackToSite: () => void;
@@ -60,7 +61,7 @@ interface RaffleFormState {
   shortTitle: string;
   subtitle: string;
   region: string;
-  category: RaffleCategory;
+  categoryLabel: string;
   poolTier: PoolTier;
   totalTickets: number;
   /** Lucro sobre o valor dos prêmios, 0 a 200 (%). */
@@ -92,7 +93,7 @@ function defaultFormState(): RaffleFormState {
     shortTitle: '',
     subtitle: '',
     region: 'Vice Beach',
-    category: 'gta6-ps5',
+    categoryLabel: 'GTA VI + PS5',
     poolTier: 'exclusive',
     totalTickets: 100,
     profitPct: 100,
@@ -109,6 +110,7 @@ function defaultFormState(): RaffleFormState {
 }
 
 const ADMIN_TOKEN_KEY = 'leonida_admin_bearer_v1';
+const NEW_CATEGORY_OPTION = '__nova_categoria__';
 let memoryAdminToken: string | null = null;
 
 function setStoredAdminToken(token: string | null): void {
@@ -219,7 +221,60 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
   const [savingForm, setSavingForm] = useState(false);
 
   // Winner / Finalize modal state
+  // Catálogo (categorias e produtos já usados) para facilitar a criação de sorteios.
+  const [catalog, setCatalog] = useState<{categories: CategoryOption[]; products: ProductBreakdownItem[]}>({
+    categories: [...DEFAULT_CATEGORIES],
+    products: [],
+  });
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
+  useEffect(() => {
+    if (!formOpen) return;
+    setCreatingCategory(false);
+    let cancelled = false;
+    fetch('/api/admin/catalog', {credentials: 'include', headers: getAdminHeaders()})
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.categories) {
+          setCatalog({categories: data.categories, products: data.products ?? []});
+        }
+      })
+      .catch(() => {
+        // Sem catálogo: o formulário continua funcionando com as categorias padrão.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formOpen]);
+
+  /** Categorias do dropdown, garantindo que a do sorteio em edição apareça. */
+  const categoryOptions = useMemo(() => {
+    const label = formState.categoryLabel.trim();
+    if (creatingCategory || !label || catalog.categories.some((c) => c.label === label)) {
+      return catalog.categories;
+    }
+    return [...catalog.categories, {id: label, label}];
+  }, [catalog.categories, formState.categoryLabel, creatingCategory]);
+
+  /** Preenche o produto com o preço salvo quando o nome bate com um produto do catálogo. */
+  const findCatalogProduct = (name: string) =>
+    catalog.products.find((p) => p.name.toLowerCase() === name.trim().toLowerCase());
+
+  const addCatalogProduct = (product: ProductBreakdownItem) => {
+    setFormState((s) => {
+      const emptyIdx = s.products.findIndex((p) => !p.name.trim());
+      const next = [...s.products];
+      if (emptyIdx >= 0) next[emptyIdx] = {...product};
+      else next.push({...product});
+      return {...s, products: next};
+    });
+  };
+
   const [winnerModalRaffle, setWinnerModalRaffle] = useState<AdminRaffleRecord | null>(null);
+  const [winnerAvatarInput, setWinnerAvatarInput] = useState('');
+  useEffect(() => {
+    setWinnerAvatarInput(winnerModalRaffle?.winner?.avatarUrl ?? '');
+  }, [winnerModalRaffle]);
   const [manualWinNumber, setManualWinNumber] = useState('');
   const [processingWinner, setProcessingWinner] = useState(false);
 
@@ -366,7 +421,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       shortTitle: raffle.shortTitle,
       subtitle: raffle.subtitle,
       region: raffle.region,
-      category: raffle.category,
+      categoryLabel: raffle.categoryLabel,
       poolTier: raffle.poolTier,
       totalTickets: raffle.totalTickets,
       profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
@@ -394,7 +449,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       shortTitle: raffle.shortTitle,
       subtitle: raffle.subtitle,
       region: raffle.region,
-      category: raffle.category,
+      categoryLabel: raffle.categoryLabel,
       poolTier: raffle.poolTier,
       totalTickets: raffle.totalTickets,
       profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
@@ -426,7 +481,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       shortTitle: formState.shortTitle,
       subtitle: formState.subtitle,
       region: formState.region,
-      category: formState.category,
+      categoryLabel: formState.categoryLabel,
       poolTier: formState.poolTier,
       totalTickets: formTotalTickets,
       profitPct: Number(formState.profitPct),
@@ -505,6 +560,30 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       if (ledger && ledger.raffle.id === raffleId) {
         await openLedger(raffleId);
       }
+    } finally {
+      setProcessingWinner(false);
+    }
+  };
+
+  const handleSaveWinnerAvatar = async (raffleId: string) => {
+    setProcessingWinner(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/raffles/${raffleId}/winner-avatar`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: getAdminHeaders({'Content-Type': 'application/json'}),
+        body: JSON.stringify({avatarUrl: winnerAvatarInput.trim()}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setActionError(data.error || 'Erro ao salvar a foto do ganhador.');
+        return;
+      }
+      setWinnerModalRaffle(null);
+      setActionMessage(`Foto do ganhador atualizada em "${data.raffle.title}".`);
+      await loadOverview();
+      onCatalogChanged();
     } finally {
       setProcessingWinner(false);
     }
@@ -2395,18 +2474,55 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                 </div>
 
                 <div>
-                  <label className="mb-1 block font-medium text-[#C6C0D4]">Categoria</label>
-                  <select
-                    value={formState.category}
-                    disabled={formItemsLocked}
-                    onChange={(e) =>
-                      setFormState((s) => ({...s, category: e.target.value as RaffleCategory}))
-                    }
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="gta6">Somente GTA VI</option>
-                    <option value="gta6-ps5">GTA VI + PS5</option>
-                  </select>
+                  <label htmlFor="raffle-category" className="mb-1 block font-medium text-[#C6C0D4]">
+                    Categoria
+                  </label>
+                  {creatingCategory ? (
+                    <div className="flex gap-2">
+                      <input
+                        id="raffle-category"
+                        type="text"
+                        autoFocus
+                        maxLength={40}
+                        value={formState.categoryLabel}
+                        onChange={(e) => setFormState((s) => ({...s, categoryLabel: e.target.value}))}
+                        placeholder="Nome da nova categoria"
+                        className="min-h-[40px] min-w-0 flex-1 rounded-lg border border-[#FF4E8E]/60 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreatingCategory(false);
+                          setFormState((s) => ({...s, categoryLabel: categoryOptions[0]?.label ?? ''}));
+                        }}
+                        className="min-h-[40px] rounded-lg border border-white/15 px-3 text-xs text-[#C6C0D4] hover:text-white"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      id="raffle-category"
+                      value={formState.categoryLabel}
+                      disabled={formItemsLocked}
+                      onChange={(e) => {
+                        if (e.target.value === NEW_CATEGORY_OPTION) {
+                          setCreatingCategory(true);
+                          setFormState((s) => ({...s, categoryLabel: ''}));
+                        } else {
+                          setFormState((s) => ({...s, categoryLabel: e.target.value}));
+                        }
+                      }}
+                      className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {categoryOptions.map((c) => (
+                        <option key={c.id} value={c.label}>
+                          {c.label}
+                        </option>
+                      ))}
+                      <option value={NEW_CATEGORY_OPTION}>+ Nova categoria…</option>
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -2488,19 +2604,58 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   )}
                 </div>
 
+                {!formItemsLocked && catalog.products.length > 0 && (
+                  <div className="mt-3">
+                    <span className="block text-[11px] text-[#958FA8]">
+                      Produtos já usados (clique para adicionar):
+                    </span>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {catalog.products
+                        .filter(
+                          (p) =>
+                            !formState.products.some(
+                              (fp) => fp.name.trim().toLowerCase() === p.name.toLowerCase(),
+                            ),
+                        )
+                        .map((p) => (
+                          <button
+                            key={p.name}
+                            type="button"
+                            onClick={() => addCatalogProduct(p)}
+                            className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-[#14111D] px-2.5 py-1 text-[11px] text-[#D6D1E2] hover:border-[#FF4E8E]/60 hover:text-white"
+                          >
+                            <Plus className="h-3 w-3 text-[#FF7EB3]" aria-hidden="true" />
+                            <span>{p.name}</span>
+                            <span className="font-mono text-[#958FA8]">{formatBRL(p.retailPrice)}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                <datalist id="catalog-products">
+                  {catalog.products.map((p) => (
+                    <option key={p.name} value={p.name} />
+                  ))}
+                </datalist>
+
                 <div className="mt-3 space-y-2">
                   {formState.products.map((prod, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
                         type="text"
                         required
+                        list="catalog-products"
                         value={prod.name}
                         disabled={formItemsLocked}
                         onChange={(e) => {
                           const val = e.target.value;
+                          const known = findCatalogProduct(val);
                           setFormState((s) => {
                             const next = [...s.products];
-                            next[idx] = {...next[idx], name: val};
+                            next[idx] = known
+                              ? {name: known.name, retailPrice: known.retailPrice}
+                              : {...next[idx], name: val};
                             return {...s, products: next};
                           });
                         }}
@@ -2815,6 +2970,58 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   {winnerModalRaffle.totalTickets.toLocaleString('pt-BR')}
                 </p>
               </div>
+
+              {winnerModalRaffle.winner && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSaveWinnerAvatar(winnerModalRaffle.id);
+                  }}
+                  className="space-y-2 rounded-xl border border-[#FFD166]/30 bg-[#FFD166]/5 p-3"
+                >
+                  <p className="text-sm text-white">
+                    Ganhador atual: <strong>{winnerModalRaffle.winner.buyerName}</strong> · #
+                    {winnerModalRaffle.winner.winningNumber}
+                  </p>
+                  {winnerModalRaffle.winner.socialHandle && winnerModalRaffle.winner.socialUrl ? (
+                    <a
+                      href={winnerModalRaffle.winner.socialUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-[#FF7EB3] hover:text-white"
+                    >
+                      @{winnerModalRaffle.winner.socialHandle} ({winnerModalRaffle.winner.socialPlatform})
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <p className="text-[#958FA8]">Comprador sem rede social cadastrada.</p>
+                  )}
+                  <label htmlFor="winner-avatar" className="block pt-1 font-medium text-[#C6C0D4]">
+                    Foto do ganhador (link da imagem)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="winner-avatar"
+                      type="url"
+                      value={winnerAvatarInput}
+                      onChange={(e) => setWinnerAvatarInput(e.target.value)}
+                      placeholder="https://..."
+                      className="min-h-[38px] min-w-0 flex-1 rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-xs text-white focus:border-[#FF4E8E] focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={processingWinner}
+                      className="min-h-[38px] rounded-lg bg-[#FFD166] px-3 text-xs font-bold text-[#0B0A10] hover:bg-[#FFE09A] disabled:opacity-50"
+                    >
+                      Salvar foto
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#958FA8]">
+                    TikTok e X têm foto automática. Para Instagram/Facebook, abra o perfil, copie o
+                    endereço da foto e cole aqui. Em branco = mostra as iniciais.
+                  </p>
+                </form>
+              )}
 
               <button
                 type="button"
