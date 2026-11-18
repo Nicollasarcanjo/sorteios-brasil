@@ -19,6 +19,8 @@ export interface RaffleInput {
   categoryLabel: string;
   poolTier: PoolTier;
   totalTickets: number;
+  /** Mínimo de cotas por compra (1 a totalTickets). */
+  minTicketsPerPurchase: number;
   /** Lucro sobre o valor dos prêmios (0 a 2 = 0% a 200%). */
   targetProfitRate: number;
   drawDate: string;
@@ -54,6 +56,7 @@ export function parseRaffleInput(
   const poolTier: PoolTier = body.poolTier === 'exclusive' ? 'exclusive' : 'popular';
   const totalTickets = Number(body.totalTickets);
   const targetProfitRate = parseProfitPct(body.profitPct) ?? TARGET_PROFIT_RATE;
+  const minTicketsRaw = Number(body.minTicketsPerPurchase ?? 1);
   const drawDate = sanitizeText(body.drawDate, 60) || 'Em breve';
   const drawTimestamp =
     typeof body.drawTimestamp === 'string' && !Number.isNaN(Date.parse(body.drawTimestamp))
@@ -83,6 +86,9 @@ export function parseRaffleInput(
   if (!Number.isInteger(totalTickets) || totalTickets < 10 || totalTickets > 20000) {
     return {ok: false, error: 'Quantidade de cotas deve ser entre 10 e 20.000.'};
   }
+  if (!Number.isInteger(minTicketsRaw) || minTicketsRaw < 1 || minTicketsRaw > totalTickets) {
+    return {ok: false, error: `A compra mínima deve ser entre 1 e ${totalTickets} cotas.`};
+  }
   if (products.length === 0) {
     return {ok: false, error: 'Adicione ao menos 1 produto com valor válido.'};
   }
@@ -98,6 +104,7 @@ export function parseRaffleInput(
       categoryLabel,
       poolTier,
       totalTickets,
+      minTicketsPerPurchase: minTicketsRaw,
       targetProfitRate,
       drawDate,
       drawTimestamp,
@@ -137,6 +144,7 @@ export function buildNewRaffle(input: RaffleInput): StoredRaffle {
     poolLabel:
       input.poolTier === 'exclusive' ? 'Menos Pessoas · Alta Chance' : 'Mais Gente · Valor Menor',
     ...pricing,
+    minTicketsPerPurchase: input.minTicketsPerPurchase,
     initialSoldCount: 0,
     drawDate: input.drawDate,
     drawTimestamp: input.drawTimestamp,

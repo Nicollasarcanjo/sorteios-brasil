@@ -49,6 +49,8 @@ export interface StoredRaffle {
   totalRevenue: number;
   ticketPrice: number;
   totalTickets: number;
+  /** Mínimo de cotas por compra (padrão 1). */
+  minTicketsPerPurchase?: number;
   initialSoldCount: number;
   drawDate: string;
   drawTimestamp: string;
@@ -221,6 +223,7 @@ export interface PublicRaffleProjection {
   totalRevenue: number;
   ticketPrice: number;
   totalTickets: number;
+  minTicketsPerPurchase: number;
   soldCount: number;
   soldNumbers: number[];
   drawDate: string;

@@ -42,6 +42,8 @@ export interface RaffleItem {
   totalRevenue: number;
   ticketPrice: number;
   totalTickets: number;
+  /** Mínimo de cotas por compra (padrão 1). */
+  minTicketsPerPurchase?: number;
   soldCount: number;
   soldNumbers: number[];
   drawDate: string;

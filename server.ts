@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
 import {createServer as createViteServer} from 'vite';
@@ -27,6 +28,7 @@ import {
   buildAdminReferralSummaries,
   buildPublicLivePartners,
   buildRafflePricing,
+  getMinTicketsPerPurchase,
   parseProfitPct,
   getAllSoldNumbersForRaffle,
   getStorageBackend,
@@ -102,6 +104,7 @@ async function startServer() {
   await initStore();
 
   const app = express();
+  const httpServer = http.createServer(app);
   app.set('trust proxy', 1);
 
   // Express 4 não captura rejeições de handlers async: encaminha para o
@@ -128,7 +131,8 @@ async function startServer() {
   }
 
   // Strict payload size bound (Denial-of-Wallet / DoS guard)
-  app.use(express.json({limit: '64kb'}));
+  // 256kb comporta uma reserva com até 20.000 números.
+  app.use(express.json({limit: '256kb'}));
 
   // Security headers (preserve iframe embedding in AI Studio preview)
   app.use((_req, res, next) => {
@@ -284,8 +288,10 @@ async function startServer() {
       res.status(400).json({error: 'Informe um CPF válido (necessário para emissão do PIX AbacatePay).'});
       return;
     }
-    if (!Array.isArray(rawNumbers) || rawNumbers.length === 0 || rawNumbers.length > 200) {
-      res.status(400).json({error: 'Selecione entre 1 e 200 cotas por reserva.'});
+    // Sem teto fixo por compra: o limite real é o total de cotas do sorteio (máx. 20.000),
+    // e o mínimo é o configurado no sorteio (checado na transação abaixo).
+    if (!Array.isArray(rawNumbers) || rawNumbers.length === 0 || rawNumbers.length > 20000) {
+      res.status(400).json({error: 'Selecione pelo menos 1 cota.'});
       return;
     }
 
@@ -328,6 +334,15 @@ async function startServer() {
             status: 400 as const,
             payload: {
               error: `Os números devem estar entre 1 e ${raffle.totalTickets}.`,
+            },
+          };
+        }
+        const minTickets = getMinTicketsPerPurchase(raffle);
+        if (requestedNumbers.length < minTickets) {
+          return {
+            status: 400 as const,
+            payload: {
+              error: `A compra mínima neste sorteio é de ${minTickets} cotas.`,
             },
           };
         }
@@ -1071,6 +1086,16 @@ async function startServer() {
           raffle.totalTickets = body.totalTickets;
         }
       }
+      if (body.minTicketsPerPurchase !== undefined) {
+        const minTickets = Number(body.minTicketsPerPurchase);
+        if (!Number.isInteger(minTickets) || minTickets < 1 || minTickets > raffle.totalTickets) {
+          return {
+            status: 400 as const,
+            payload: {error: `A compra mínima deve ser entre 1 e ${raffle.totalTickets} cotas.`},
+          };
+        }
+        raffle.minTicketsPerPurchase = minTickets;
+      }
 
       // Mantém o lucro do sorteio, a menos que o painel envie um novo percentual.
       const profitRate =
@@ -1697,8 +1722,10 @@ async function startServer() {
   // =========================================================================
 
   if (!IS_PROD) {
+    // HMR pelo mesmo servidor/porta do site: sem isso o Vite abre outra porta (24678),
+    // que conflita entre instâncias e deixa a página aberta com código antigo.
     const vite = await createViteServer({
-      server: {middlewareMode: true},
+      server: {middlewareMode: true, hmr: {server: httpServer}},
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -1724,7 +1751,7 @@ async function startServer() {
     },
   );
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(
       `Sorteios Brasil server listening on http://0.0.0.0:${PORT} (db: ${getStorageBackend()})`,
     );

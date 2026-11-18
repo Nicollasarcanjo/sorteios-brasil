@@ -26,6 +26,12 @@ export const TARGET_PROFIT_RATE = 1.0;
 export const MIN_PROFIT_RATE = 0;
 export const MAX_PROFIT_RATE = 2.0;
 
+/** Mínimo de cotas por compra do sorteio (1 se não configurado; nunca acima do total). */
+export function getMinTicketsPerPurchase(raffle: {minTicketsPerPurchase?: number; totalTickets: number}): number {
+  const min = Math.trunc(Number(raffle.minTicketsPerPurchase) || 1);
+  return Math.min(Math.max(1, min), Math.max(1, raffle.totalTickets));
+}
+
 /** Converte um percentual (0–200) vindo do painel em taxa (0–2). Inválido → null. */
 export function parseProfitPct(value: unknown): number | null {
   const pct = Number(value);
@@ -154,6 +160,7 @@ export function toPublicRaffleProjection(
     totalRevenue: raffle.totalRevenue,
     ticketPrice: raffle.ticketPrice,
     totalTickets: raffle.totalTickets,
+    minTicketsPerPurchase: getMinTicketsPerPurchase(raffle),
     soldCount: soldNumbers.length,
     soldNumbers,
     drawDate: raffle.drawDate,

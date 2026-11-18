@@ -69,6 +69,10 @@ interface RaffleFormState {
   /** 'tickets': admin define a quantidade de cotas; 'price': define o valor da cota. */
   pricingMode: 'tickets' | 'price';
   desiredTicketPrice: number;
+  /** Compra mínima: por quantidade de cotas ou por valor (R$). */
+  minPurchaseMode: 'tickets' | 'value';
+  minTickets: number;
+  minValue: number;
   drawDate: string;
   drawTimestamp: string;
   orderBumpCount: number;
@@ -99,6 +103,9 @@ function defaultFormState(): RaffleFormState {
     profitPct: 100,
     pricingMode: 'tickets',
     desiredTicketPrice: 10,
+    minPurchaseMode: 'tickets',
+    minTickets: 1,
+    minValue: 10,
     drawDate: formattedDrawDate,
     drawTimestamp: localIso,
     orderBumpCount: 2,
@@ -427,6 +434,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
       pricingMode: 'tickets',
       desiredTicketPrice: raffle.ticketPrice,
+      minPurchaseMode: 'tickets',
+      minTickets: raffle.minTicketsPerPurchase ?? 1,
+      minValue: Number(((raffle.minTicketsPerPurchase ?? 1) * raffle.ticketPrice).toFixed(2)),
       drawDate: raffle.drawDate,
       drawTimestamp: localIso,
       orderBumpCount: raffle.orderBumpCount,
@@ -455,6 +465,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
       pricingMode: 'tickets',
       desiredTicketPrice: raffle.ticketPrice,
+      minPurchaseMode: 'tickets',
+      minTickets: raffle.minTicketsPerPurchase ?? 1,
+      minValue: Number(((raffle.minTicketsPerPurchase ?? 1) * raffle.ticketPrice).toFixed(2)),
       orderBumpCount: raffle.orderBumpCount,
       orderBumpDiscountPct: raffle.orderBumpDiscountPct,
       image: raffle.image,
@@ -468,8 +481,8 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
 
   const handleSaveRaffle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formPricingError) {
-      setActionError(formPricingError);
+    if (formPricingError || formMinError) {
+      setActionError(formPricingError || formMinError);
       return;
     }
     setSavingForm(true);
@@ -485,6 +498,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       poolTier: formState.poolTier,
       totalTickets: formTotalTickets,
       profitPct: Number(formState.profitPct),
+      minTicketsPerPurchase: formMinTickets,
       drawDate: formState.drawDate,
       drawTimestamp: formState.drawTimestamp
         ? new Date(formState.drawTimestamp).toISOString()
@@ -1018,6 +1032,17 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
         : formTotalTickets > 20000
           ? 'Com esses valores ficariam mais de 20.000 cotas. Aumente o valor da cota.'
           : null;
+  // Compra mínima em cotas (no modo valor: arredonda para cima para cobrir o valor pedido).
+  const formMinTickets =
+    formState.minPurchaseMode === 'tickets'
+      ? Math.max(1, Math.trunc(Number(formState.minTickets) || 1))
+      : formTicketPrice > 0
+        ? Math.max(1, Math.ceil((Number(formState.minValue) || 0) / formTicketPrice - 1e-9))
+        : 1;
+  const formMinError =
+    formMinTickets > formTotalTickets && formTotalTickets > 0
+      ? `A compra mínima (${formMinTickets} cotas) passa do total de cotas do sorteio.`
+      : null;
   /** "Criar novamente": itens travados, só cotas/valor (e data) podem mudar. */
   const formItemsLocked = !formState.editingId && Boolean(formState.duplicatedFromTitle);
 
@@ -2854,6 +2879,62 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                       {formPricingError}
                     </p>
                   )}
+
+                  <div>
+                    <span className="mb-1.5 block font-medium text-[#C6C0D4]">Compra mínima por pessoa</span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex gap-2">
+                        <select
+                          aria-label="Tipo de compra mínima"
+                          value={formState.minPurchaseMode}
+                          onChange={(e) =>
+                            setFormState((s) => ({...s, minPurchaseMode: e.target.value as 'tickets' | 'value'}))
+                          }
+                          className="min-h-[40px] shrink-0 rounded-lg border border-white/15 bg-[#14111D] px-2 text-xs text-white focus:border-[#FF4E8E] focus:outline-none"
+                        >
+                          <option value="tickets">Cotas</option>
+                          <option value="value">Valor (R$)</option>
+                        </select>
+                        {formState.minPurchaseMode === 'tickets' ? (
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            aria-label="Quantidade mínima de cotas"
+                            value={formState.minTickets}
+                            onChange={(e) =>
+                              setFormState((s) => ({...s, minTickets: Number.parseInt(e.target.value || '1', 10)}))
+                            }
+                            className="min-h-[40px] w-full min-w-0 rounded-lg border border-white/15 bg-[#14111D] px-3 font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            aria-label="Valor mínimo da compra em reais"
+                            value={formState.minValue}
+                            onChange={(e) =>
+                              setFormState((s) => ({...s, minValue: Number.parseFloat(e.target.value || '0')}))
+                            }
+                            className="min-h-[40px] w-full min-w-0 rounded-lg border border-white/15 bg-[#14111D] px-3 font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                          />
+                        )}
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-[#14111D] px-3 py-2">
+                        <span className="block text-[11px] text-[#958FA8]">Comprador precisa levar pelo menos</span>
+                        <span className="font-mono text-sm font-bold text-white">
+                          {formMinTickets.toLocaleString('pt-BR')} {formMinTickets === 1 ? 'cota' : 'cotas'} ·{' '}
+                          {formatBRL(Number((formMinTickets * formTicketPrice).toFixed(2)))}
+                        </span>
+                      </div>
+                    </div>
+                    {formMinError && (
+                      <p role="alert" className="mt-2 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-red-200">
+                        {formMinError}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 space-y-3 border-t border-white/10 pt-3">
@@ -2926,7 +3007,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                 </button>
                 <button
                   type="submit"
-                  disabled={savingForm || Boolean(formPricingError)}
+                  disabled={savingForm || Boolean(formPricingError || formMinError)}
                   className="min-h-[40px] rounded-lg bg-white px-5 text-xs font-bold text-[#0B0A10] hover:bg-[#F3E8EE] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingForm

@@ -240,6 +240,8 @@ export function RaffleDetailPage({
     );
   };
 
+  const minTickets = Math.max(1, raffle.minTicketsPerPurchase ?? 1);
+  const belowMinimum = selectedNumbers.length < minTickets;
   const baseCost = selectedNumbers.length * raffle.ticketPrice;
   const bumpCost = activeBumpCount > 0 ? bumpDiscountedPrice : 0;
   const totalCost = baseCost + bumpCost;
@@ -383,8 +385,12 @@ export function RaffleDetailPage({
       setFormError('Informe seu CPF com 11 dígitos para gerar o PIX.');
       return;
     }
-    if (selectedNumbers.length === 0) {
-      setFormError('Selecione pelo menos uma cota antes de finalizar.');
+    if (belowMinimum) {
+      setFormError(
+        minTickets > 1
+          ? `A compra mínima neste sorteio é de ${minTickets} cotas.`
+          : 'Selecione pelo menos uma cota antes de finalizar.',
+      );
       return;
     }
 
@@ -847,6 +853,11 @@ export function RaffleDetailPage({
                             ? 'Escolha seus números no painel'
                             : 'Monte seu pacote de cotas'}
                         </h2>
+                        {minTickets > 1 && (
+                          <span className="rounded-full border border-[#FFD166]/40 bg-[#FFD166]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#FFD166]">
+                            Mínimo {minTickets} cotas · {formatBRL(minTickets * raffle.ticketPrice)}
+                          </span>
+                        )}
                         {selectedNumbers.length > 0 && (
                           <button
                             type="button"
@@ -1072,12 +1083,14 @@ export function RaffleDetailPage({
                       {!checkoutOpen ? (
                         <button
                           type="button"
-                          disabled={selectedNumbers.length === 0}
+                          disabled={belowMinimum}
                           onClick={() => setCheckoutOpen(true)}
                           className="mt-5 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-[#0B0A10] transition-all hover:bg-[#F3E8EE] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
                         >
-                          {selectedNumbers.length === 0
-                            ? 'Selecione ao menos 1 número'
+                          {belowMinimum
+                            ? minTickets > 1
+                              ? `Compra mínima: ${minTickets} cotas (faltam ${minTickets - selectedNumbers.length})`
+                              : 'Selecione ao menos 1 número'
                             : `Reservar ${totalSelectedWithBump} ${totalSelectedWithBump === 1 ? 'Cota' : 'Cotas'} · ${formatBRL(totalCost)}`}
                         </button>
                       ) : (
