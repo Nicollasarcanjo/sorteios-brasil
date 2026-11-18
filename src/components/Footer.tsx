@@ -4,13 +4,11 @@ import {RaffleCategory} from '../data/raffles';
 interface FooterProps {
   onNavigateHome: () => void;
   onSelectCategoryAnchor: (category: RaffleCategory | 'all') => void;
-  onNavigateAdmin: () => void;
 }
 
 export function Footer({
   onNavigateHome,
   onSelectCategoryAnchor,
-  onNavigateAdmin,
 }: FooterProps) {
   return (
     <footer className="border-t border-white/10 bg-[#08070C] py-12">
@@ -51,18 +49,11 @@ export function Footer({
             >
               Combos GTA VI + PS5
             </button>
-            <button
-              type="button"
-              onClick={onNavigateAdmin}
-              className="text-[#FF7EB3] hover:text-white"
-            >
-              Painel Administrativo
-            </button>
           </div>
         </div>
 
         <div className="mt-10 flex flex-col justify-between gap-4 border-t border-white/10 pt-6 text-xs text-[#7D7692] sm:flex-row sm:items-center">
-          <span>© 2026 Sorteios Brasil. Plataforma com isolamento RLS e auditoria verificada.</span>
+          <span>© 2026 Sorteios Brasil.</span>
           <span>Proibido para menores de 18 anos · Apuração ao Vivo</span>
         </div>
       </div>

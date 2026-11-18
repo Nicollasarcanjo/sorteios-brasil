@@ -22,9 +22,14 @@ type AppRoute =
   | {view: 'admin'}
   | {view: 'raffle'; slug: string};
 
+// Painel administrativo: endereço não divulgado no site (sem links públicos).
+// O acesso continua protegido pelo login do admin no servidor.
+const ADMIN_PATH = '/paineladmsorteio2026';
+
 function parseRouteFromHash(): AppRoute {
+  const pathname = window.location.pathname.replace(/\/+$/, '');
+  if (pathname === ADMIN_PATH) return {view: 'admin'};
   const hash = window.location.hash;
-  if (hash === '#/admin') return {view: 'admin'};
   const match = hash.match(/^#\/sorteio\/([a-z0-9-]+)(?:\?.*)?$/);
   if (match) return {view: 'raffle', slug: match[1]};
   return {view: 'home'};
@@ -101,7 +106,11 @@ export default function App() {
       window.scrollTo({top: 0, behavior: 'smooth'});
     };
     window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
   }, []);
 
   const navigateToRaffle = (slug: string) => {
@@ -110,13 +119,10 @@ export default function App() {
     window.scrollTo({top: 0, behavior: 'smooth'});
   };
 
-  const navigateToAdmin = () => {
-    window.location.hash = '#/admin';
-    setRoute({view: 'admin'});
-    window.scrollTo({top: 0, behavior: 'smooth'});
-  };
-
   const navigateHome = (scrollToId?: string) => {
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
     if (window.location.hash !== '#/' && window.location.hash !== '') {
       window.location.hash = '#/';
     }
@@ -197,7 +203,6 @@ export default function App() {
         onNavigateHome={() => navigateHome()}
         onSelectCategoryAnchor={handleSelectCategoryAnchor}
         onNavigateRules={() => navigateHome('modalidades')}
-        onNavigateAdmin={navigateToAdmin}
         onOpenTickets={() => setTicketsDrawerOpen(true)}
       />
 
@@ -340,15 +345,8 @@ export default function App() {
                   Nenhum sorteio publicado no momento
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#A59FB8]">
-                  Os dados de exemplo foram removidos. Acesse o Painel Administrativo para criar um novo sorteio já com a taxa PIX da AbacatePay (R$ 0,80 por cota) calculada no valor final.
+                  Novos sorteios serão anunciados em breve. Volte logo!
                 </p>
-                <button
-                  type="button"
-                  onClick={navigateToAdmin}
-                  className="mt-5 min-h-[40px] rounded-lg bg-white px-5 py-2 text-sm font-semibold text-[#0B0A10] hover:bg-[#F3E8EE]"
-                >
-                  Abrir Painel Admin
-                </button>
               </div>
             ) : filteredRaffles.length === 0 ? (
               <div className="mt-10 rounded-2xl border border-dashed border-white/15 bg-[#14111D] px-6 py-14 text-center">
@@ -439,7 +437,6 @@ export default function App() {
       <Footer
         onNavigateHome={() => navigateHome()}
         onSelectCategoryAnchor={handleSelectCategoryAnchor}
-        onNavigateAdmin={navigateToAdmin}
       />
 
       <MyTicketsDrawer

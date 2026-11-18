@@ -7,7 +7,6 @@ interface HeaderProps {
   onNavigateHome: () => void;
   onSelectCategoryAnchor: (category: RaffleCategory | 'all') => void;
   onNavigateRules: () => void;
-  onNavigateAdmin: () => void;
   onOpenTickets: () => void;
 }
 
@@ -16,7 +15,6 @@ export function Header({
   onNavigateHome,
   onSelectCategoryAnchor,
   onNavigateRules,
-  onNavigateAdmin,
   onOpenTickets,
 }: HeaderProps) {
   return (
@@ -61,13 +59,6 @@ export function Header({
             className="whitespace-nowrap shrink-0 border-b border-transparent py-1 transition-colors hover:border-[#FF4E8E] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
           >
             Modalidades
-          </button>
-          <button
-            type="button"
-            onClick={onNavigateAdmin}
-            className="whitespace-nowrap shrink-0 border-b border-transparent py-1 transition-colors hover:border-[#FF4E8E] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
-          >
-            Gerenciar
           </button>
         </nav>
 

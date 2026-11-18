@@ -33,3 +33,17 @@ Sem essas variáveis o servidor usa o arquivo `server/data/db.json` (só para de
 O front-end não acessa o Supabase diretamente: tudo passa pelas rotas `/api/...`.
 As tabelas têm RLS ligado e nenhuma policy, então a chave publishable/anon não lê nada.
 O servidor mantém o estado em memória, então rode **uma única instância**.
+
+## Deploy no Railway
+
+O `railway.json` já define build (`npm run build`), start (`npm start`), 1 réplica e healthcheck em `/api/raffles`.
+
+1. Railway → **New Project → Deploy from GitHub repo** → escolha este repositório.
+2. Em **Variables**, cadastre: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
+   `SESSION_SECRET`, `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET`.
+   Sem as cinco primeiras o servidor se recusa a subir em produção.
+3. Em **Settings → Networking → Generate Domain** (ou adicione seu domínio).
+4. Na AbacatePay, aponte o webhook para `https://SEU-DOMINIO/api/webhooks/abacatepay`.
+5. Mantenha **1 réplica** (não ative escala horizontal).
+
+Painel admin: `https://SEU-DOMINIO/paineladmsorteio2026`.

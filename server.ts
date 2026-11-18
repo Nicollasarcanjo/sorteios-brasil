@@ -61,9 +61,34 @@ import type {
 } from './server/types.ts';
 
 const PORT = Number(process.env.PORT || 3000);
+// `node server.ts --production` (npm start) liga o modo produção em qualquer SO.
+if (process.argv.includes('--production')) {
+  process.env.NODE_ENV = 'production';
+}
 const IS_PROD = process.env.NODE_ENV === 'production';
 
+/** Em produção, não sobe sem os segredos essenciais (evita senha padrão de dev no ar). */
+function assertProductionConfig(): void {
+  if (!IS_PROD) return;
+  const isSet = (name: string, minLen = 1) => {
+    const v = process.env[name]?.trim() ?? '';
+    return v.length >= minLen && !v.startsWith('CHANGE_ME') && !v.startsWith('MY_');
+  };
+  const missing = [
+    !isSet('SUPABASE_URL') && 'SUPABASE_URL',
+    !isSet('SUPABASE_SECRET_KEY') && !isSet('SUPABASE_SERVICE_ROLE_KEY') && 'SUPABASE_SECRET_KEY',
+    !isSet('ADMIN_EMAIL') && 'ADMIN_EMAIL',
+    !isSet('ADMIN_PASSWORD', 8) && 'ADMIN_PASSWORD (mín. 8 caracteres)',
+    !isSet('SESSION_SECRET', 16) && 'SESSION_SECRET (mín. 16 caracteres)',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(`Variáveis de ambiente obrigatórias ausentes em produção: ${missing.join(', ')}`);
+  }
+}
+
 async function startServer() {
+  assertProductionConfig();
+
   // Carrega o banco (Supabase ou arquivo local) antes de aceitar requisições.
   await initStore();
 
@@ -1662,7 +1687,8 @@ async function startServer() {
     const distDir = path.resolve(process.cwd(), 'dist');
     if (fs.existsSync(distDir)) {
       app.use(express.static(distDir));
-      app.get('/{*splat}', (_req, res) => {
+      // SPA fallback (Express 4): qualquer rota fora de /api devolve o index.html.
+      app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
         res.sendFile(path.join(distDir, 'index.html'));
       });
     }
