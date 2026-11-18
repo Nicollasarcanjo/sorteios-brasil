@@ -5,6 +5,7 @@ import {
   Banknote,
   BellRing,
   CheckCircle2,
+  Copy,
   Download,
   Edit3,
   ExternalLink,
@@ -53,6 +54,8 @@ type AdminTab = 'raffles' | 'referrals' | 'security';
 
 interface RaffleFormState {
   editingId: string | null;
+  /** Título do sorteio de origem quando é "Criar novamente" (novo sorteio com os mesmos itens). */
+  duplicatedFromTitle?: string;
   title: string;
   shortTitle: string;
   subtitle: string;
@@ -365,6 +368,30 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       image: raffle.image,
       description: raffle.description,
       products: raffle.products.map((p) => ({...p})),
+    });
+    setActionError(null);
+    setFormOpen(true);
+  };
+
+  /** Novo sorteio com os mesmos itens/configuração de um existente (inclusive finalizado). */
+  const openDuplicateModal = (raffle: AdminRaffleRecord) => {
+    const fresh = defaultFormState();
+    setFormState({
+      ...fresh,
+      duplicatedFromTitle: raffle.title,
+      title: raffle.title,
+      shortTitle: raffle.shortTitle,
+      subtitle: raffle.subtitle,
+      region: raffle.region,
+      category: raffle.category,
+      poolTier: raffle.poolTier,
+      totalTickets: raffle.totalTickets,
+      orderBumpCount: raffle.orderBumpCount,
+      orderBumpDiscountPct: raffle.orderBumpDiscountPct,
+      image: raffle.image,
+      description: raffle.description,
+      products: raffle.products.map((p) => ({...p})),
+      // Data nova (padrão: daqui a 5 dias) — ajuste antes de publicar.
     });
     setActionError(null);
     setFormOpen(true);
@@ -1207,6 +1234,14 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
               </button>
               <button
                 type="button"
+                onClick={() => openDuplicateModal(ledger.raffle)}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-white/10"
+              >
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Criar novamente</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setWinnerModalRaffle(ledger.raffle)}
                 className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg bg-[#FF4E8E] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#E03B78]"
               >
@@ -1642,6 +1677,15 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                           >
                             <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
                             <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDuplicateModal(r)}
+                            title="Criar um novo sorteio com os mesmos itens"
+                            className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-medium text-[#D6D1E2] hover:bg-white/10 hover:text-white"
+                          >
+                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Criar novamente</span>
                           </button>
                           <button
                             type="button"
@@ -2263,9 +2307,20 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
         >
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <h2 className="font-display text-2xl font-bold text-white">
-                {formState.editingId ? 'Editar Sorteio' : 'Adicionar Novo Sorteio'}
-              </h2>
+              <div>
+                <h2 className="font-display text-2xl font-bold text-white">
+                  {formState.editingId
+                    ? 'Editar Sorteio'
+                    : formState.duplicatedFromTitle
+                      ? 'Criar Sorteio Novamente'
+                      : 'Adicionar Novo Sorteio'}
+                </h2>
+                {!formState.editingId && formState.duplicatedFromTitle && (
+                  <p className="mt-1 text-xs text-[#A59FB8]">
+                    Mesmos itens de “{formState.duplicatedFromTitle}”. Confira a data do sorteio antes de publicar.
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}

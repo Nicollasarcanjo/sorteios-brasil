@@ -51,6 +51,7 @@ import {
   normalizeLiveLinks,
   resolvePartnerAvatarFromLinks,
 } from './server/liveResolver.ts';
+import {buildNewRaffle, parseRaffleInput} from './server/raffleFactory.ts';
 import type {
   ProductBreakdownItem,
   ReferralPayoutRecord,
@@ -932,108 +933,21 @@ async function startServer() {
       return;
     }
 
-    const title = sanitizeText(body.title, 120);
-    const shortTitle = sanitizeText(body.shortTitle, 60) || title.slice(0, 40);
-    const subtitle = sanitizeText(body.subtitle, 240);
-    const region = sanitizeText(body.region, 60) || 'Vice City';
-    const category = body.category === 'gta6-ps5' ? 'gta6-ps5' : 'gta6';
-    const poolTier = body.poolTier === 'exclusive' ? 'exclusive' : 'popular';
-    const totalTickets = Number(body.totalTickets);
-    const drawDate = sanitizeText(body.drawDate, 60) || 'Em breve';
-    const drawTimestamp =
-      typeof body.drawTimestamp === 'string' && !Number.isNaN(Date.parse(body.drawTimestamp))
-        ? new Date(body.drawTimestamp).toISOString()
-        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const orderBumpCount = Math.max(1, Math.min(20, Number(body.orderBumpCount) || 2));
-    const orderBumpDiscountPct = Math.max(
-      5,
-      Math.min(50, Number(body.orderBumpDiscountPct) || 30),
-    );
-    const image =
-      sanitizeText(body.image, 260) ||
-      '/src/assets/images/raffle_gta6_standard_1795020694086.jpg';
-    const description = sanitizeText(body.description, 600) || subtitle;
-    const drawRule =
-      sanitizeText(body.drawRule, 400) ||
-      'Apuração transparente realizada ao vivo na plataforma com registro verificável.';
-
-    const rawProducts = Array.isArray(body.products) ? body.products : [];
-    const products: ProductBreakdownItem[] = rawProducts
-      .slice(0, 10)
-      .map((p) => {
-        const item = p as Record<string, unknown>;
-        return {
-          name: sanitizeText(item?.name, 120),
-          retailPrice: Number(item?.retailPrice),
-        };
-      })
-      .filter((p) => p.name.length >= 2 && Number.isFinite(p.retailPrice) && p.retailPrice > 0);
-
-    if (title.length < 4 || subtitle.length < 6) {
-      res.status(400).json({error: 'Título e subtítulo são obrigatórios.'});
+    const parsed = parseRaffleInput(body);
+    if (!parsed.ok) {
+      res.status(400).json({error: parsed.error});
       return;
     }
-    if (!Number.isInteger(totalTickets) || totalTickets < 10 || totalTickets > 20000) {
-      res.status(400).json({error: 'Quantidade de cotas deve ser entre 10 e 20.000.'});
-      return;
-    }
-    if (products.length === 0) {
-      res.status(400).json({error: 'Adicione ao menos 1 produto com valor válido.'});
-      return;
-    }
-
-    const pricing = buildRafflePricing(products, totalTickets);
-
-    const slugBase = title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 50);
-    const uniqueSuffix = crypto.randomBytes(2).toString('hex');
-    const slug = `${slugBase || 'sorteio'}-${uniqueSuffix}`;
-    const id = `raf-${crypto.randomBytes(3).toString('hex')}`;
-    const now = new Date().toISOString();
+    const newRaffle = buildNewRaffle(parsed.input);
 
     const created = await withDbTransaction((db) => {
-      const newRaffle: StoredRaffle = {
-        id,
-        slug,
-        title,
-        shortTitle,
-        subtitle,
-        region,
-        category,
-        categoryLabel: category === 'gta6-ps5' ? 'GTA VI + PS5' : 'Somente GTA VI',
-        poolTier,
-        poolLabel:
-          poolTier === 'exclusive'
-            ? 'Menos Pessoas · Alta Chance'
-            : 'Mais Gente · Valor Menor',
-        ...pricing,
-        initialSoldCount: 0,
-        drawDate,
-        drawTimestamp,
-        orderBumpCount,
-        orderBumpDiscountPct,
-        editionBadge: poolTier === 'exclusive' ? 'Grupo Exclusivo' : 'Cota Popular',
-        image,
-        galleryCaption: subtitle,
-        description,
-        drawRule,
-        status: 'active',
-        winner: null,
-        createdAt: now,
-        updatedAt: now,
-      };
       db.raffles.unshift(newRaffle);
       appendAuditLog(
         db,
         adminSession?.email || 'admin',
         'CREATE_RAFFLE',
-        id,
-        `Criado sorteio "${title}" (${totalTickets} cotas × R$ ${pricing.ticketPrice.toFixed(2)} · taxa AbacatePay simulada R$ ${pricing.estimatedGatewayFees.toFixed(2)}).`,
+        newRaffle.id,
+        `Criado sorteio "${newRaffle.title}" (${newRaffle.totalTickets} cotas × R$ ${newRaffle.ticketPrice.toFixed(2)} · taxa AbacatePay simulada R$ ${newRaffle.estimatedGatewayFees.toFixed(2)}).`,
       );
       return newRaffle;
     });
