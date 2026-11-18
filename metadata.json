@@ -1,0 +1,6 @@
+{
+  "name": "Sorteios Brasil",
+  "description": "Galeria oficial de sorteios inspirada em Vice City: cotas populares e grupos exclusivos para GTA VI e combos PlayStation 5.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
