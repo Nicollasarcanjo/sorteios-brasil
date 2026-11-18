@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import {sanitizeText} from './security.ts';
-import {buildRafflePricing} from './store.ts';
+import {TARGET_PROFIT_RATE, buildRafflePricing, parseProfitPct} from './store.ts';
 import type {PoolTier, ProductBreakdownItem, RaffleCategory, StoredRaffle} from './types.ts';
 
 /**
@@ -17,6 +17,8 @@ export interface RaffleInput {
   category: RaffleCategory;
   poolTier: PoolTier;
   totalTickets: number;
+  /** Lucro sobre o valor dos prêmios (0 a 2 = 0% a 200%). */
+  targetProfitRate: number;
   drawDate: string;
   drawTimestamp: string;
   orderBumpCount: number;
@@ -41,6 +43,7 @@ export function parseRaffleInput(
   const category: RaffleCategory = body.category === 'gta6-ps5' ? 'gta6-ps5' : 'gta6';
   const poolTier: PoolTier = body.poolTier === 'exclusive' ? 'exclusive' : 'popular';
   const totalTickets = Number(body.totalTickets);
+  const targetProfitRate = parseProfitPct(body.profitPct) ?? TARGET_PROFIT_RATE;
   const drawDate = sanitizeText(body.drawDate, 60) || 'Em breve';
   const drawTimestamp =
     typeof body.drawTimestamp === 'string' && !Number.isNaN(Date.parse(body.drawTimestamp))
@@ -84,6 +87,7 @@ export function parseRaffleInput(
       category,
       poolTier,
       totalTickets,
+      targetProfitRate,
       drawDate,
       drawTimestamp,
       orderBumpCount,
@@ -97,7 +101,7 @@ export function parseRaffleInput(
 }
 
 export function buildNewRaffle(input: RaffleInput): StoredRaffle {
-  const pricing = buildRafflePricing(input.products, input.totalTickets);
+  const pricing = buildRafflePricing(input.products, input.totalTickets, input.targetProfitRate);
   const slugBase = input.title
     .toLowerCase()
     .normalize('NFD')

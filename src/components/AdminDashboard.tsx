@@ -63,6 +63,11 @@ interface RaffleFormState {
   category: RaffleCategory;
   poolTier: PoolTier;
   totalTickets: number;
+  /** Lucro sobre o valor dos prêmios, 0 a 200 (%). */
+  profitPct: number;
+  /** 'tickets': admin define a quantidade de cotas; 'price': define o valor da cota. */
+  pricingMode: 'tickets' | 'price';
+  desiredTicketPrice: number;
   drawDate: string;
   drawTimestamp: string;
   orderBumpCount: number;
@@ -90,6 +95,9 @@ function defaultFormState(): RaffleFormState {
     category: 'gta6-ps5',
     poolTier: 'exclusive',
     totalTickets: 100,
+    profitPct: 100,
+    pricingMode: 'tickets',
+    desiredTicketPrice: 10,
     drawDate: formattedDrawDate,
     drawTimestamp: localIso,
     orderBumpCount: 2,
@@ -361,6 +369,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       category: raffle.category,
       poolTier: raffle.poolTier,
       totalTickets: raffle.totalTickets,
+      profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
+      pricingMode: 'tickets',
+      desiredTicketPrice: raffle.ticketPrice,
       drawDate: raffle.drawDate,
       drawTimestamp: localIso,
       orderBumpCount: raffle.orderBumpCount,
@@ -386,6 +397,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       category: raffle.category,
       poolTier: raffle.poolTier,
       totalTickets: raffle.totalTickets,
+      profitPct: Math.round((raffle.targetProfitRate ?? 1) * 100),
+      pricingMode: 'tickets',
+      desiredTicketPrice: raffle.ticketPrice,
       orderBumpCount: raffle.orderBumpCount,
       orderBumpDiscountPct: raffle.orderBumpDiscountPct,
       image: raffle.image,
@@ -399,6 +413,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
 
   const handleSaveRaffle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formPricingError) {
+      setActionError(formPricingError);
+      return;
+    }
     setSavingForm(true);
     setActionError(null);
     setActionMessage(null);
@@ -410,7 +428,8 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
       region: formState.region,
       category: formState.category,
       poolTier: formState.poolTier,
-      totalTickets: Number(formState.totalTickets),
+      totalTickets: formTotalTickets,
+      profitPct: Number(formState.profitPct),
       drawDate: formState.drawDate,
       drawTimestamp: formState.drawTimestamp
         ? new Date(formState.drawTimestamp).toISOString()
@@ -896,15 +915,32 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
     () => formState.products.reduce((sum, p) => sum + (Number(p.retailPrice) || 0), 0),
     [formState.products],
   );
-  const formNetRevenue = Number((formProductsSum * 2).toFixed(2));
-  const formGatewayFees = Number(
-    ((Number(formState.totalTickets) || 0) * ABACATEPAY_PIX_FEE_BRL).toFixed(2),
-  );
+  // Mesma fórmula do servidor (server/store.ts → buildRafflePricing):
+  // arrecadação = prêmios × (1 + lucro) + cotas × taxa PIX;  valor da cota = arrecadação / cotas.
+  const formProfitRate = Math.min(2, Math.max(0, (Number(formState.profitPct) || 0) / 100));
+  const formProfitValue = Number((formProductsSum * formProfitRate).toFixed(2));
+  const formNetRevenue = Number((formProductsSum * (1 + formProfitRate)).toFixed(2));
+  // Modo "valor da cota": cotas = (prêmios + lucro) / (valor desejado − taxa PIX), arredondado para cima.
+  const formTotalTickets =
+    formState.pricingMode === 'price'
+      ? formState.desiredTicketPrice > ABACATEPAY_PIX_FEE_BRL && formNetRevenue > 0
+        ? Math.ceil(formNetRevenue / (formState.desiredTicketPrice - ABACATEPAY_PIX_FEE_BRL) - 1e-9)
+        : 0
+      : Number(formState.totalTickets) || 0;
+  const formGatewayFees = Number((formTotalTickets * ABACATEPAY_PIX_FEE_BRL).toFixed(2));
   const formTotalRevenue = Number((formNetRevenue + formGatewayFees).toFixed(2));
   const formTicketPrice =
-    formState.totalTickets > 0
-      ? Number((formTotalRevenue / formState.totalTickets).toFixed(2))
-      : 0;
+    formTotalTickets > 0 ? Number((formTotalRevenue / formTotalTickets).toFixed(2)) : 0;
+  const formPricingError =
+    formState.pricingMode === 'price' && formState.desiredTicketPrice <= ABACATEPAY_PIX_FEE_BRL
+      ? 'O valor da cota precisa ser maior que a taxa do PIX (R$ 0,80).'
+      : formTotalTickets < 10
+        ? 'Com esses valores ficariam menos de 10 cotas. Diminua o valor da cota ou aumente o lucro.'
+        : formTotalTickets > 20000
+          ? 'Com esses valores ficariam mais de 20.000 cotas. Aumente o valor da cota.'
+          : null;
+  /** "Criar novamente": itens travados, só cotas/valor (e data) podem mudar. */
+  const formItemsLocked = !formState.editingId && Boolean(formState.duplicatedFromTitle);
 
   const filteredLedgerReservations = useMemo(() => {
     if (!ledger) return [];
@@ -2317,7 +2353,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                 </h2>
                 {!formState.editingId && formState.duplicatedFromTitle && (
                   <p className="mt-1 text-xs text-[#A59FB8]">
-                    Mesmos itens de “{formState.duplicatedFromTitle}”. Confira a data do sorteio antes de publicar.
+                    Mesmos itens de “{formState.duplicatedFromTitle}” (travados). Ajuste o lucro, as cotas ou o valor da cota e confira a data.
                   </p>
                 )}
               </div>
@@ -2338,9 +2374,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                     type="text"
                     required
                     value={formState.title}
+                    disabled={formItemsLocked}
                     onChange={(e) => setFormState((s) => ({...s, title: e.target.value}))}
                     placeholder="Ex: Combo PS5 Pro + GTA VI Edição Vice"
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
@@ -2350,9 +2387,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                     type="text"
                     required
                     value={formState.subtitle}
+                    disabled={formItemsLocked}
                     onChange={(e) => setFormState((s) => ({...s, subtitle: e.target.value}))}
                     placeholder="Descrição curta exibida no card da galeria"
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
@@ -2360,10 +2398,11 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   <label className="mb-1 block font-medium text-[#C6C0D4]">Categoria</label>
                   <select
                     value={formState.category}
+                    disabled={formItemsLocked}
                     onChange={(e) =>
                       setFormState((s) => ({...s, category: e.target.value as RaffleCategory}))
                     }
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="gta6">Somente GTA VI</option>
                     <option value="gta6-ps5">GTA VI + PS5</option>
@@ -2374,41 +2413,26 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   <label className="mb-1 block font-medium text-[#C6C0D4]">Modalidade</label>
                   <select
                     value={formState.poolTier}
+                    disabled={formItemsLocked}
                     onChange={(e) =>
                       setFormState((s) => ({...s, poolTier: e.target.value as PoolTier}))
                     }
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="popular">Mais Gente · Valor Menor</option>
                     <option value="exclusive">Menos Pessoas · Alta Chance</option>
                   </select>
                 </div>
 
-                <div>
-                  <label className="mb-1 block font-medium text-[#C6C0D4]">Total de cotas</label>
-                  <input
-                    type="number"
-                    min={10}
-                    max={20000}
-                    required
-                    value={formState.totalTickets}
-                    onChange={(e) =>
-                      setFormState((s) => ({
-                        ...s,
-                        totalTickets: Number.parseInt(e.target.value || '100', 10),
-                      }))
-                    }
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
-                  />
-                </div>
-
+                
                 <div>
                   <label className="mb-1 block font-medium text-[#C6C0D4]">Região de Leonida</label>
                   <input
                     type="text"
                     value={formState.region}
+                    disabled={formItemsLocked}
                     onChange={(e) => setFormState((s) => ({...s, region: e.target.value}))}
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
@@ -2420,7 +2444,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                     type="datetime-local"
                     value={formState.drawTimestamp}
                     onChange={(e) => setFormState((s) => ({...s, drawTimestamp: e.target.value}))}
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 font-mono text-xs text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 font-mono text-xs text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
@@ -2428,8 +2452,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   <label className="mb-1 block font-medium text-[#C6C0D4]">Imagem do card</label>
                   <select
                     value={formState.image}
+                    disabled={formItemsLocked}
                     onChange={(e) => setFormState((s) => ({...s, image: e.target.value}))}
-                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-xs text-white focus:border-[#FF4E8E] focus:outline-none"
+                    className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-xs text-white focus:border-[#FF4E8E] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {ARTWORK_PRESETS.map((preset) => (
                       <option key={preset.url} value={preset.url}>
@@ -2444,8 +2469,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
               <div className="rounded-xl border border-white/10 bg-[#0B0A10] p-4">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-white">
-                    Produtos do Prêmio (Cálculo 100% Marketplace)
+                    Produtos do Prêmio
                   </span>
+                  {!formItemsLocked && (
                   <button
                     type="button"
                     onClick={() =>
@@ -2459,6 +2485,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                     <Plus className="h-3.5 w-3.5" />
                     <span>Adicionar produto</span>
                   </button>
+                  )}
                 </div>
 
                 <div className="mt-3 space-y-2">
@@ -2468,6 +2495,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                         type="text"
                         required
                         value={prod.name}
+                        disabled={formItemsLocked}
                         onChange={(e) => {
                           const val = e.target.value;
                           setFormState((s) => {
@@ -2477,7 +2505,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                           });
                         }}
                         placeholder="Nome do produto"
-                        className="min-h-[36px] flex-1 rounded-lg border border-white/15 bg-[#14111D] px-2.5 text-xs text-white"
+                        className="min-h-[36px] flex-1 rounded-lg border border-white/15 bg-[#14111D] px-2.5 text-xs text-white disabled:cursor-not-allowed disabled:opacity-60"
                       />
                       <input
                         type="number"
@@ -2485,6 +2513,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                         step="0.01"
                         required
                         value={prod.retailPrice}
+                        disabled={formItemsLocked}
                         onChange={(e) => {
                           const val = Number.parseFloat(e.target.value || '0');
                           setFormState((s) => {
@@ -2493,9 +2522,9 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                             return {...s, products: next};
                           });
                         }}
-                        className="min-h-[36px] w-28 rounded-lg border border-white/15 bg-[#14111D] px-2.5 font-mono text-xs text-white"
+                        className="min-h-[36px] w-28 rounded-lg border border-white/15 bg-[#14111D] px-2.5 font-mono text-xs text-white disabled:cursor-not-allowed disabled:opacity-60"
                       />
-                      {formState.products.length > 1 && (
+                      {formState.products.length > 1 && !formItemsLocked && (
                         <button
                           type="button"
                           onClick={() =>
@@ -2513,6 +2542,165 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   ))}
                 </div>
 
+                {/* Lucro + modo de precificação (cotas ou valor da cota) */}
+                <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label htmlFor="profitPct" className="font-medium text-[#C6C0D4]">
+                        Lucro desejado
+                        <span className="ml-1 font-normal text-[#958FA8]">(sobre o valor dos prêmios)</span>
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          id="profitPct"
+                          type="number"
+                          min={0}
+                          max={200}
+                          step={1}
+                          value={formState.profitPct}
+                          onChange={(e) =>
+                            setFormState((s) => ({
+                              ...s,
+                              profitPct: Math.min(200, Math.max(0, Number(e.target.value) || 0)),
+                            }))
+                          }
+                          className="min-h-[34px] w-20 rounded-lg border border-white/15 bg-[#14111D] px-2 text-right font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                        />
+                        <span className="font-mono text-sm text-white">%</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={200}
+                      step={5}
+                      value={formState.profitPct}
+                      onChange={(e) =>
+                        setFormState((s) => ({...s, profitPct: Number(e.target.value)}))
+                      }
+                      aria-label="Lucro desejado em porcentagem"
+                      className="mt-2 w-full accent-[#FF4E8E]"
+                    />
+                    <div className="flex justify-between text-[10px] text-[#958FA8]">
+                      <span>0%</span>
+                      <span>100%</span>
+                      <span>200%</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="mb-1.5 block font-medium text-[#C6C0D4]">O que você quer definir?</span>
+                    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Modo de precificação">
+                      {(
+                        [
+                          {mode: 'tickets', label: 'Quantidade de cotas', hint: 'o valor da cota é calculado'},
+                          {mode: 'price', label: 'Valor da cota', hint: 'a quantidade de cotas é calculada'},
+                        ] as const
+                      ).map((opt) => {
+                        const active = formState.pricingMode === opt.mode;
+                        return (
+                          <button
+                            key={opt.mode}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() =>
+                              setFormState((s) =>
+                                s.pricingMode === opt.mode
+                                  ? s
+                                  : opt.mode === 'price'
+                                    ? {...s, pricingMode: 'price', desiredTicketPrice: formTicketPrice || s.desiredTicketPrice}
+                                    : {...s, pricingMode: 'tickets', totalTickets: formTotalTickets || s.totalTickets},
+                              )
+                            }
+                            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                              active
+                                ? 'border-[#FF4E8E] bg-[#FF4E8E]/10 text-white'
+                                : 'border-white/15 text-[#B8B2C8] hover:border-white/30 hover:text-white'
+                            }`}
+                          >
+                            <span className="block text-xs font-semibold">{opt.label}</span>
+                            <span className="block text-[10px] text-[#958FA8]">{opt.hint}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {formState.pricingMode === 'tickets' ? (
+                      <>
+                        <div>
+                          <label htmlFor="totalTickets" className="mb-1 block font-medium text-[#C6C0D4]">
+                            Total de cotas
+                          </label>
+                          <input
+                            id="totalTickets"
+                            type="number"
+                            min={10}
+                            max={20000}
+                            required
+                            value={formState.totalTickets}
+                            onChange={(e) =>
+                              setFormState((s) => ({
+                                ...s,
+                                totalTickets: Number.parseInt(e.target.value || '0', 10),
+                              }))
+                            }
+                            className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#14111D] px-3 font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                          />
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-[#14111D] px-3 py-2">
+                          <span className="block text-[11px] text-[#958FA8]">Valor da cota (calculado)</span>
+                          <span className="font-mono text-lg font-bold text-[#FF7EB3]">
+                            {formatBRL(formTicketPrice)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label htmlFor="desiredTicketPrice" className="mb-1 block font-medium text-[#C6C0D4]">
+                            Valor da cota (R$)
+                          </label>
+                          <input
+                            id="desiredTicketPrice"
+                            type="number"
+                            min={1}
+                            step="0.01"
+                            required
+                            value={formState.desiredTicketPrice}
+                            onChange={(e) =>
+                              setFormState((s) => ({
+                                ...s,
+                                desiredTicketPrice: Number.parseFloat(e.target.value || '0'),
+                              }))
+                            }
+                            className="min-h-[40px] w-full rounded-lg border border-white/15 bg-[#14111D] px-3 font-mono text-sm text-white focus:border-[#FF4E8E] focus:outline-none"
+                          />
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-[#14111D] px-3 py-2">
+                          <span className="block text-[11px] text-[#958FA8]">Quantidade de cotas (calculada)</span>
+                          <span className="font-mono text-lg font-bold text-[#FF7EB3]">
+                            {formTotalTickets.toLocaleString('pt-BR')}
+                          </span>
+                          {formTicketPrice > 0 && formTicketPrice !== formState.desiredTicketPrice && (
+                            <span className="block text-[10px] text-[#958FA8]">
+                              Valor final ajustado: {formatBRL(formTicketPrice)} por cota
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {formPricingError && (
+                    <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-red-200">
+                      {formPricingError}
+                    </p>
+                  )}
+                </div>
+
                 <div className="mt-4 space-y-3 border-t border-white/10 pt-3">
                   <div className="grid grid-cols-2 gap-3 font-mono sm:grid-cols-5">
                     <div>
@@ -2525,10 +2713,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                     </div>
                     <div>
                       <span className="block font-sans text-[11px] text-[#958FA8]">
-                        Lucro Alvo (+100%)
+                        Lucro (+{formState.profitPct}%)
                       </span>
                       <span className="text-sm font-semibold text-emerald-300">
-                        {formatBRL(formProductsSum)}
+                        {formatBRL(formProfitValue)}
                       </span>
                     </div>
                     <div>
@@ -2558,14 +2746,20 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                   </div>
                   <p className="text-[11px] text-[#958FA8]">
                     Simulação conservadora: considera 1 pagamento PIX separado por cota (
-                    {Number(formState.totalTickets) || 0} × R$ 0,80 ={' '}
+                    {formTotalTickets} × R$ 0,80 ={' '}
                     <span className="font-mono text-[#E2DCEB]">
                       {formatBRL(formGatewayFees)}
                     </span>
-                    ), garantindo o prêmio + 100% de lucro líquido mesmo se cada cota for paga individualmente.
+                    ), garantindo o prêmio + {formState.profitPct}% de lucro líquido mesmo se cada cota for paga individualmente.
                   </p>
                 </div>
               </div>
+
+              {actionError && (
+                <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-red-200">
+                  {actionError}
+                </p>
+              )}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
@@ -2577,8 +2771,8 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                 </button>
                 <button
                   type="submit"
-                  disabled={savingForm}
-                  className="min-h-[40px] rounded-lg bg-white px-5 text-xs font-bold text-[#0B0A10] hover:bg-[#F3E8EE] disabled:opacity-50"
+                  disabled={savingForm || Boolean(formPricingError)}
+                  className="min-h-[40px] rounded-lg bg-white px-5 text-xs font-bold text-[#0B0A10] hover:bg-[#F3E8EE] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingForm
                     ? 'Salvando...'

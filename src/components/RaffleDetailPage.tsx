@@ -1222,7 +1222,7 @@ export function RaffleDetailPage({
                               disabled={submitting}
                               className="min-h-[44px] flex-1 rounded-xl bg-white px-4 text-sm font-bold text-[#0B0A10] hover:bg-[#F3E8EE] disabled:opacity-50"
                             >
-                              {submitting ? 'Gerando PIX AbacatePay...' : 'Gerar PIX AbacatePay'}
+                              {submitting ? 'Gerando PIX...' : 'Gerar PIX'}
                             </button>
                           </div>
                         </form>

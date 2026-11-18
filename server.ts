@@ -27,6 +27,7 @@ import {
   buildAdminReferralSummaries,
   buildPublicLivePartners,
   buildRafflePricing,
+  parseProfitPct,
   getAllSoldNumbersForRaffle,
   getStorageBackend,
   initStore,
@@ -1041,7 +1042,11 @@ async function startServer() {
         }
       }
 
-      const repriced = buildRafflePricing(raffle.products, raffle.totalTickets);
+      // Mantém o lucro do sorteio, a menos que o painel envie um novo percentual.
+      const profitRate =
+        parseProfitPct(body.profitPct) ??
+        (typeof raffle.targetProfitRate === 'number' ? raffle.targetProfitRate : undefined);
+      const repriced = buildRafflePricing(raffle.products, raffle.totalTickets, profitRate);
       raffle.productsTotalValue = repriced.productsTotalValue;
       raffle.targetProfitRate = repriced.targetProfitRate;
       raffle.pixFeePerTransaction = repriced.pixFeePerTransaction;

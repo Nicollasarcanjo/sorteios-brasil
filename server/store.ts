@@ -21,18 +21,34 @@ export {
 } from './persistence.ts';
 
 
+/** Lucro padrão (100%) e limites aceitos no painel (0% a 200%). */
 export const TARGET_PROFIT_RATE = 1.0;
+export const MIN_PROFIT_RATE = 0;
+export const MAX_PROFIT_RATE = 2.0;
+
+/** Converte um percentual (0–200) vindo do painel em taxa (0–2). Inválido → null. */
+export function parseProfitPct(value: unknown): number | null {
+  const pct = Number(value);
+  if (value === undefined || value === null || value === '' || !Number.isFinite(pct)) return null;
+  const rate = pct / 100;
+  return Math.min(MAX_PROFIT_RATE, Math.max(MIN_PROFIT_RATE, Number(rate.toFixed(4))));
+}
 
 /**
  * Simula o pior caso de taxas da AbacatePay (R$ 0,80 por PIX, assumindo 1 PIX por cota)
- * somado ao valor dos produtos + lucro alvo de 100%, garantindo margem líquida intacta.
+ * somado ao valor dos produtos + lucro alvo (padrão 100%), garantindo margem líquida intacta.
  */
-export function buildRafflePricing(products: ProductBreakdownItem[], totalTickets: number) {
+export function buildRafflePricing(
+  products: ProductBreakdownItem[],
+  totalTickets: number,
+  profitRate: number = TARGET_PROFIT_RATE,
+) {
+  const rate = Math.min(MAX_PROFIT_RATE, Math.max(MIN_PROFIT_RATE, profitRate));
   const productsTotalValue = Number(
     products.reduce((sum, item) => sum + item.retailPrice, 0).toFixed(2),
   );
   const netRevenueAfterPixFees = Number(
-    (productsTotalValue * (1 + TARGET_PROFIT_RATE)).toFixed(2),
+    (productsTotalValue * (1 + rate)).toFixed(2),
   );
   const pixFeePerTransaction = ABACATEPAY_PIX_FEE_BRL;
   const estimatedGatewayFees = Number((totalTickets * pixFeePerTransaction).toFixed(2));
@@ -42,7 +58,7 @@ export function buildRafflePricing(products: ProductBreakdownItem[], totalTicket
   return {
     products,
     productsTotalValue,
-    targetProfitRate: TARGET_PROFIT_RATE,
+    targetProfitRate: rate,
     pixFeePerTransaction,
     estimatedGatewayFees,
     netRevenueAfterPixFees,
