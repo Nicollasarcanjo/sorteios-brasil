@@ -879,12 +879,14 @@ export function RaffleDetailPage({
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                           <input
                             id="custom-ticket-quantity"
-                            type="number"
+                            type="text"
                             inputMode="numeric"
-                            min={1}
-                            step={1}
+                            pattern="[0-9]*"
+                            autoComplete="off"
                             value={customQuantity}
-                            onChange={(event) => setCustomQuantity(event.target.value)}
+                            onChange={(event) =>
+                              setCustomQuantity(event.target.value.replace(/\D/g, ''))
+                            }
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault();
