@@ -19,6 +19,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   Shuffle,
@@ -202,6 +203,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
   const [payoutModalReferralId, setPayoutModalReferralId] = useState<string | null>(null);
   const [payoutNoteInput, setPayoutNoteInput] = useState('');
   const [processingPayout, setProcessingPayout] = useState(false);
+  const [sharingReferralId, setSharingReferralId] = useState<string | null>(null);
+  const [sharingRaffleSlug, setSharingRaffleSlug] = useState('');
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [shareLinkError, setShareLinkError] = useState<string | null>(null);
 
   const inspectReferralCode = useMemo(
     () => referralCodes.find((c) => c.id === inspectReferralId) ?? null,
@@ -211,6 +216,60 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
     () => referralCodes.find((c) => c.id === payoutModalReferralId) ?? null,
     [referralCodes, payoutModalReferralId],
   );
+  const sharingReferral = useMemo(
+    () => referralCodes.find((c) => c.id === sharingReferralId) ?? null,
+    [referralCodes, sharingReferralId],
+  );
+  const shareableRaffles = useMemo(
+    () => raffles.filter((raffle) => raffle.status === 'active'),
+    [raffles],
+  );
+  const sharingRaffle = useMemo(
+    () => shareableRaffles.find((raffle) => raffle.slug === sharingRaffleSlug) ?? null,
+    [shareableRaffles, sharingRaffleSlug],
+  );
+  const referralShareUrl = useMemo(() => {
+    if (!sharingReferral || !sharingRaffle) return '';
+    return new URL(
+      `/#/sorteio/${sharingRaffle.slug}?ref=${encodeURIComponent(sharingReferral.code)}`,
+      window.location.origin,
+    ).toString();
+  }, [sharingReferral, sharingRaffle]);
+
+  const openReferralShare = (refItem: AdminReferralCodeSummary) => {
+    setSharingReferralId(refItem.id);
+    setSharingRaffleSlug(shareableRaffles[0]?.slug ?? '');
+    setShareLinkCopied(false);
+    setShareLinkError(null);
+  };
+
+  const handleCopyReferralShareLink = async () => {
+    if (!referralShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(referralShareUrl);
+      setShareLinkCopied(true);
+      setShareLinkError(null);
+    } catch {
+      setShareLinkError('Não foi possível copiar. Selecione e copie o endereço exibido.');
+    }
+  };
+
+  const handleShareReferralLink = async () => {
+    if (!sharingReferral || !sharingRaffle || !referralShareUrl) return;
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: sharingRaffle.title,
+          text: `Participe da ação ${sharingRaffle.title} com o código ${sharingReferral.code}.`,
+          url: referralShareUrl,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+      }
+    }
+    await handleCopyReferralShareLink();
+  };
 
   // Ledger state (Inspect all numbers + buyers of a raffle)
   const [ledger, setLedger] = useState<AdminLedgerResponse | null>(null);
@@ -2050,6 +2109,22 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   type="button"
+                                  disabled={!refItem.active || shareableRaffles.length === 0}
+                                  onClick={() => openReferralShare(refItem)}
+                                  title={
+                                    !refItem.active
+                                      ? 'Ative o código para compartilhar uma ação'
+                                      : shareableRaffles.length === 0
+                                        ? 'Não há ações ativas para compartilhar'
+                                        : 'Gerar link de uma ação com este código de apoiador'
+                                  }
+                                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[#FF7EB3]/40 bg-[#FF7EB3]/10 px-2.5 py-1 text-[11px] font-semibold text-[#FFB5D2] hover:bg-[#FF7EB3]/20 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  <Share2 className="h-3 w-3" aria-hidden="true" />
+                                  <span>Compartilhar ação</span>
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => setInspectReferralId(refItem.id)}
                                   className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-white/15"
                                 >
@@ -3428,6 +3503,121 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Compartilhar ação com código do parceiro */}
+      {sharingReferral && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-referral-title"
+        >
+          <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <h2 id="share-referral-title" className="font-display text-xl font-bold text-white">
+                  Compartilhar ação
+                </h2>
+                <p className="mt-1 text-xs text-[#958FA8]">
+                  {sharingReferral.promoterName} · Código{' '}
+                  <span className="font-mono font-bold text-[#FF7EB3]">{sharingReferral.code}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSharingReferralId(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 text-[#B8B2C8] hover:text-white"
+                aria-label="Fechar compartilhamento"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="share-raffle-select" className="mb-1.5 block text-xs font-medium text-[#C6C0D4]">
+                  Escolha a ação
+                </label>
+                <select
+                  id="share-raffle-select"
+                  value={sharingRaffleSlug}
+                  onChange={(event) => {
+                    setSharingRaffleSlug(event.target.value);
+                    setShareLinkCopied(false);
+                    setShareLinkError(null);
+                  }}
+                  disabled={shareableRaffles.length === 0}
+                  className="min-h-[42px] w-full rounded-lg border border-white/15 bg-[#0B0A10] px-3 text-sm text-white focus:border-[#FF7EB3] focus:outline-none disabled:opacity-50"
+                >
+                  {shareableRaffles.length === 0 ? (
+                    <option value="">Nenhuma ação ativa disponível</option>
+                  ) : (
+                    shareableRaffles.map((raffle) => (
+                      <option key={raffle.id} value={raffle.slug}>
+                        {raffle.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {referralShareUrl ? (
+                <div>
+                  <label htmlFor="share-referral-url" className="mb-1.5 block text-xs font-medium text-[#C6C0D4]">
+                    Link com o código do parceiro aplicado
+                  </label>
+                  <input
+                    id="share-referral-url"
+                    type="text"
+                    readOnly
+                    value={referralShareUrl}
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="min-h-[42px] w-full rounded-lg border border-white/10 bg-[#0B0A10] px-3 font-mono text-xs text-[#D6D1E2] focus:border-[#FF7EB3] focus:outline-none"
+                  />
+                  <p className="mt-1.5 text-[11px] text-[#958FA8]">
+                    Quem abrir esse link verá esta ação com o código preenchido no checkout.
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-white/10 bg-[#0B0A10] p-3 text-xs text-[#958FA8]">
+                  Crie ou publique uma ação para gerar um link de compartilhamento.
+                </p>
+              )}
+
+              {shareLinkError && <p className="text-xs text-red-300" role="alert">{shareLinkError}</p>}
+              {shareLinkCopied && <p className="text-xs text-emerald-300" role="status">Link copiado.</p>}
+
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSharingReferralId(null)}
+                  className="min-h-[40px] rounded-lg border border-white/15 px-4 text-xs font-medium text-[#C6C0D4] hover:text-white"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  disabled={!referralShareUrl}
+                  onClick={handleShareReferralLink}
+                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-[#FF7EB3]/40 bg-[#FF7EB3]/10 px-4 text-xs font-semibold text-[#FFB5D2] hover:bg-[#FF7EB3]/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Compartilhar</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!referralShareUrl}
+                  onClick={handleCopyReferralShareLink}
+                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-white px-4 text-xs font-bold text-[#0B0A10] hover:bg-[#F3E8EE] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{shareLinkCopied ? 'Copiado' : 'Copiar link'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
