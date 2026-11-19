@@ -301,7 +301,7 @@ export default function App() {
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-[#14111D] p-1"
+                  className="flex max-w-full flex-wrap gap-1 rounded-lg border border-white/10 bg-[#14111D] p-1"
                   role="group"
                   aria-label="Filtrar por prêmio"
                 >
@@ -310,7 +310,7 @@ export default function App() {
                       key={tab.id}
                       type="button"
                       onClick={() => setCategoryFilter(tab.id)}
-                      className={`min-h-[36px] rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
+                      className={`min-h-10 max-w-full rounded-md px-2 py-1.5 text-center text-[11px] font-semibold leading-tight transition-colors sm:min-h-[36px] sm:whitespace-nowrap sm:px-3 sm:text-xs ${
                         categoryFilter === tab.id
                           ? 'bg-white text-[#0B0A10]'
                           : 'text-[#B8B2C8] hover:text-white'
@@ -322,7 +322,7 @@ export default function App() {
                 </div>
 
                 <div
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-[#14111D] p-1"
+                  className="flex max-w-full flex-wrap gap-1 rounded-lg border border-white/10 bg-[#14111D] p-1"
                   role="group"
                   aria-label="Filtrar por modalidade"
                 >
@@ -337,7 +337,7 @@ export default function App() {
                       key={tab.id}
                       type="button"
                       onClick={() => setTierFilter(tab.id)}
-                      className={`min-h-[36px] rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
+                      className={`min-h-10 max-w-full rounded-md px-2 py-1.5 text-center text-[11px] font-semibold leading-tight transition-colors sm:min-h-[36px] sm:whitespace-nowrap sm:px-3 sm:text-xs ${
                         tierFilter === tab.id
                           ? 'bg-[#FF4E8E] text-white'
                           : 'text-[#B8B2C8] hover:text-white'

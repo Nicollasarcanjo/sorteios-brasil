@@ -841,7 +841,7 @@ export function RaffleDetailPage({
                             aria-label={`Adicionar ${qty.toLocaleString('pt-BR')} ${qty === 1 ? 'cota aleatória' : 'cotas aleatórias'}`}
                             className="flex min-h-[58px] min-w-0 flex-col items-center justify-center rounded-xl border border-white/15 bg-[#20212A] px-1 py-2 text-white transition-colors hover:border-[#7FE5D7]/70 hover:bg-[#7FE5D7]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7FE5D7]"
                           >
-                            <span className="font-mono text-sm font-bold tabular-nums sm:text-base">
+                            <span className="font-mono text-[11px] font-bold tabular-nums sm:text-base">
                               +{qty.toLocaleString('pt-BR')}
                             </span>
                             <span className="text-[9px] text-[#A9A7B4]">

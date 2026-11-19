@@ -1240,10 +1240,10 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-medium text-[#B8B2C8] hover:bg-white/10 hover:text-white"
+            className="inline-flex min-h-[40px] max-w-full min-w-0 items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-medium text-[#B8B2C8] hover:bg-white/10 hover:text-white"
           >
             <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Sair ({adminEmail})</span>
+            <span className="max-w-[60vw] truncate sm:max-w-none">Sair ({adminEmail})</span>
           </button>
         </div>
       </div>
@@ -2446,7 +2446,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-6">
+          <div className="themed-scroll max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">
@@ -3030,7 +3030,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#14111D] p-6">
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h2 className="font-display text-2xl font-bold text-white">
                 Finalizar & Definir Ganhador
@@ -3177,7 +3177,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-6">
+          <div className="themed-scroll max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h2 className="font-display text-2xl font-bold text-white">
                 {editingReferralId ? 'Editar Código de Indicação' : 'Novo Código de Indicação'}
@@ -3439,7 +3439,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-6">
+          <div className="themed-scroll max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">
@@ -3615,7 +3615,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
           role="dialog"
           aria-modal="true"
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#14111D] p-6">
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-[#14111D] p-4 sm:p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h2 className="font-display text-2xl font-bold text-white">
                 Registrar Pagamento (Baixa)

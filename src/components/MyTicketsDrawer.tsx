@@ -37,13 +37,13 @@ export function MyTicketsDrawer({
       aria-modal="true"
       aria-labelledby="tickets-drawer-title"
     >
-      <div className="flex h-full w-full max-w-md flex-col border-l border-white/10 bg-[#12101B] text-[#F5F3F7] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-          <div>
-            <h2 id="tickets-drawer-title" className="text-lg font-semibold text-white">
+      <div className="flex h-full w-full min-w-0 max-w-md flex-col border-l border-white/10 bg-[#12101B] text-[#F5F3F7] shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-w-0">
+            <h2 id="tickets-drawer-title" className="text-base font-semibold leading-tight text-white sm:text-lg">
               Meus Bilhetes Reservados
             </h2>
-            <p className="mt-0.5 text-xs text-[#A59FB8]">
+            <p className="mt-1 text-xs leading-relaxed text-[#A59FB8]">
               Comprovantes, pagamentos PIX AbacatePay e números da sua conta
             </p>
           </div>
@@ -57,7 +57,7 @@ export function MyTicketsDrawer({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="themed-scroll min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {reservations.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-12 text-center">
               <Ticket className="mb-3 h-8 w-8 text-[#FF4E8E]/80" aria-hidden="true" />
@@ -85,7 +85,7 @@ export function MyTicketsDrawer({
                 return (
                   <div
                     key={res.id}
-                    className={`rounded-xl border p-4 ${
+                    className={`min-w-0 rounded-xl border p-3 sm:p-4 ${
                       isPending
                         ? 'border-[#FFD166]/35 bg-[#1B1723]'
                         : isExpired || isCancelled
@@ -93,16 +93,16 @@ export function MyTicketsDrawer({
                           : 'border-white/10 bg-[#191526]'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="font-mono text-xs text-[#FF7EB3]">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate font-mono text-xs text-[#FF7EB3]">
                           Reserva {res.id}
                         </span>
-                        <h3 className="mt-1 text-sm font-semibold text-white">
+                        <h3 className="mt-1 break-words text-sm font-semibold text-white">
                           {res.raffleTitle}
                         </h3>
                       </div>
-                      <span className="font-mono text-sm font-semibold tabular-nums text-white">
+                      <span className="shrink-0 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-white">
                         {formatBRL(res.totalPaid)}
                       </span>
                     </div>
@@ -207,7 +207,7 @@ export function MyTicketsDrawer({
         </div>
 
         {reservations.length > 0 && (
-          <div className="flex items-center justify-between border-t border-white/10 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-4 sm:px-6">
             <span className="inline-flex items-center gap-1.5 text-xs text-[#958FA8]">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
               <span>Isolamento RLS ativo · visível apenas nesta conta</span>

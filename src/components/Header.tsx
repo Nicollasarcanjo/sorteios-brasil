@@ -19,11 +19,11 @@ export function Header({
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0B0A10]/90 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-8 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:gap-8 lg:px-8">
         <button
           type="button"
           onClick={onNavigateHome}
-          className="font-display text-2xl font-bold tracking-wider text-white whitespace-nowrap shrink-0 transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
+          className="shrink-0 whitespace-nowrap font-display text-xl font-bold tracking-wider text-white transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E] sm:text-2xl"
         >
           LUCKY <span className="vice-sunset-text">SORTEIOS</span>
         </button>
@@ -66,10 +66,11 @@ export function Header({
           <button
             type="button"
             onClick={onOpenTickets}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-[#0B0A10] whitespace-nowrap shrink-0 transition-transform duration-150 hover:bg-[#F3E8EE] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-[#0B0A10] transition-transform duration-150 hover:bg-[#F3E8EE] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E] sm:gap-2 sm:px-4 sm:text-sm"
           >
             <Ticket className="h-4 w-4" aria-hidden="true" />
-            <span>Meus Bilhetes</span>
+            <span className="sm:hidden">Bilhetes</span>
+            <span className="hidden sm:inline">Meus Bilhetes</span>
             {totalReservedCount > 0 && (
               <span className="font-mono text-xs font-semibold tabular-nums text-[#C81E65]">
                 ({totalReservedCount})
