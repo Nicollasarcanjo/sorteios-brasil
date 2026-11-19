@@ -74,6 +74,7 @@ export function RaffleDetailPage({
   livePartners = [],
 }: RaffleDetailPageProps) {
   const [selectedQuantity, setSelectedQuantity] = useState(0);
+  const [customQuantity, setCustomQuantity] = useState('');
   const [selectionFeedback, setSelectionFeedback] = useState<string | null>(null);
   const [orderBumpSelected, setOrderBumpSelected] = useState(false);
 
@@ -186,6 +187,23 @@ export function RaffleDetailPage({
       return;
     }
     setSelectedQuantity((prev) => prev + quantityToAdd);
+  };
+
+  const handleAddCustomQuantity = () => {
+    const quantity = Number(customQuantity);
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      setSelectionFeedback('Informe uma quantidade inteira maior que zero.');
+      return;
+    }
+
+    const remainingToSelect = Math.max(0, remainingCount - selectedQuantity);
+    if (quantity > remainingToSelect) {
+      setSelectionFeedback('Essa quantidade não está disponível. Tente um valor menor.');
+      return;
+    }
+
+    addRandomNumbers(quantity);
+    setCustomQuantity('');
   };
 
   const minTickets = Math.max(1, raffle.minTicketsPerPurchase ?? 1);
@@ -849,6 +867,43 @@ export function RaffleDetailPage({
                             </span>
                           </button>
                         ))}
+                      </div>
+
+                      <div className="mt-3">
+                        <label
+                          htmlFor="custom-ticket-quantity"
+                          className="mb-1.5 block text-xs font-medium text-[#C6C0D4]"
+                        >
+                          Ou informe outra quantidade
+                        </label>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                          <input
+                            id="custom-ticket-quantity"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            step={1}
+                            value={customQuantity}
+                            onChange={(event) => setCustomQuantity(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                handleAddCustomQuantity();
+                              }
+                            }}
+                            placeholder="Quantidade"
+                            aria-label="Quantidade de cotas aleatórias"
+                            className="min-h-[44px] min-w-0 rounded-xl border border-white/15 bg-[#0B0A10] px-3 text-sm text-white placeholder:text-[#7D7692] focus:border-[#7FE5D7] focus:outline-none focus:ring-2 focus:ring-[#7FE5D7]/30"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddCustomQuantity}
+                            disabled={isFinalized}
+                            className="min-h-[44px] rounded-xl border border-[#7FE5D7]/50 bg-[#7FE5D7]/10 px-3 text-xs font-bold text-[#A6F3E8] transition-colors hover:bg-[#7FE5D7]/20 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
                       </div>
 
                       {selectionFeedback && (
