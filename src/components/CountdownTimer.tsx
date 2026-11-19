@@ -48,6 +48,7 @@ export function CountdownTimer({
   }, [targetDate]);
 
   const isUrgent = remaining.totalMs > 0 && remaining.totalMs < 24 * 60 * 60 * 1000;
+  const isLastDays = remaining.totalMs > 0 && remaining.totalMs < 3 * 24 * 60 * 60 * 1000;
   const isClosed = remaining.totalMs <= 0;
 
   if (variant === 'detail') {
@@ -61,8 +62,10 @@ export function CountdownTimer({
             />
             <span>Encerramento das cotas</span>
           </span>
-          {isUrgent && (
-            <span className="font-semibold text-[#FF7EB3]">Últimas horas</span>
+          {isLastDays && (
+            <span className="font-semibold text-[#FF7EB3]">
+              {isUrgent ? 'Últimas horas' : 'Últimos dias'}
+            </span>
           )}
         </div>
 
@@ -107,14 +110,21 @@ export function CountdownTimer({
       {isClosed ? (
         <span className="font-mono font-semibold text-[#958FA8]">Encerrado</span>
       ) : (
-        <span
-          className={`font-mono font-semibold tabular-nums ${
-            isUrgent ? 'text-[#FF7EB3]' : 'text-white'
-          }`}
-        >
-          {remaining.days > 0 ? `${pad2(remaining.days)}d ` : ''}
-          {pad2(remaining.hours)}h {pad2(remaining.minutes)}m {pad2(remaining.seconds)}s
-        </span>
+        <div className="flex flex-col items-end">
+          {isLastDays && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[#FF7EB3]">
+              {isUrgent ? 'Últimas horas' : 'Últimos dias'}
+            </span>
+          )}
+          <span
+            className={`font-mono font-semibold tabular-nums ${
+              isUrgent ? 'text-[#FF7EB3]' : 'text-white'
+            }`}
+          >
+            {remaining.days > 0 ? `${pad2(remaining.days)}d ` : ''}
+            {pad2(remaining.hours)}h {pad2(remaining.minutes)}m {pad2(remaining.seconds)}s
+          </span>
+        </div>
       )}
     </div>
   );

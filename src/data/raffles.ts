@@ -59,6 +59,21 @@ export interface RaffleItem {
   winner: RaffleWinnerPublic | null;
 }
 
+/** Keep open draws ahead of completed ones wherever raffle lists are shown. */
+export function sortRafflesUnfinalizedFirst(raffles: RaffleItem[]): RaffleItem[] {
+  return [...raffles].sort(
+    (a, b) => Number(a.status === 'finalized') - Number(b.status === 'finalized'),
+  );
+}
+
+/** Show the low-availability message only when sales leave at most 10% of the draw. */
+export function isRaffleNearSellout(raffle: RaffleItem): boolean {
+  if (raffle.status === 'finalized' || raffle.totalTickets <= 0) return false;
+  const remaining = Math.max(0, raffle.totalTickets - raffle.soldCount);
+  const lowAvailabilityThreshold = Math.max(3, Math.ceil(raffle.totalTickets * 0.1));
+  return remaining <= lowAvailabilityThreshold;
+}
+
 export interface UserReservation {
   id: string;
   raffleId: string;

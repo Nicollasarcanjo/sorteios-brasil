@@ -98,6 +98,35 @@ function assertProductionConfig(): void {
   }
 }
 
+function pickRandomAvailableNumbers(
+  totalTickets: number,
+  soldNumbers: ReadonlySet<number>,
+  quantity: number,
+): number[] | null {
+  if (quantity < 1 || quantity > totalTickets - soldNumbers.size) return null;
+
+  // Rejection sampling is fast while the pool is mostly open.
+  if (soldNumbers.size + quantity * 2 < totalTickets / 2) {
+    const picked = new Set<number>();
+    while (picked.size < quantity) {
+      const number = crypto.randomInt(1, totalTickets + 1);
+      if (!soldNumbers.has(number)) picked.add(number);
+    }
+    return [...picked].sort((a, b) => a - b);
+  }
+
+  // Near sellout, build the remaining pool once and shuffle only the requested prefix.
+  const available: number[] = [];
+  for (let number = 1; number <= totalTickets; number++) {
+    if (!soldNumbers.has(number)) available.push(number);
+  }
+  for (let i = 0; i < quantity; i++) {
+    const j = i + crypto.randomInt(available.length - i);
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  return available.slice(0, quantity).sort((a, b) => a - b);
+}
+
 async function startServer() {
   assertProductionConfig();
 
@@ -230,7 +259,7 @@ async function startServer() {
     // Strict allowlist check (reject shadow / privilege-escalation fields)
     const allowedKeys = new Set([
       'raffleId',
-      'numbers',
+      'quantity',
       'buyerName',
       'buyerEmail',
       'buyerPhone',
@@ -261,7 +290,7 @@ async function startServer() {
       : null;
     const applyOrderBump = body.applyOrderBump === true;
     const referralCodeInput = sanitizeText(body.referralCode, 24).toUpperCase();
-    const rawNumbers = body.numbers;
+    const quantity = typeof body.quantity === 'number' ? Math.trunc(body.quantity) : 0;
 
     if (!raffleId || !/^[a-zA-Z0-9_-]+$/.test(raffleId)) {
       res.status(400).json({error: 'Identificador do sorteio inválido.'});
@@ -289,9 +318,13 @@ async function startServer() {
       res.status(400).json({error: 'Informe um CPF válido (necessário para emissão do PIX AbacatePay).'});
       return;
     }
-    // Sem teto fixo por compra: o limite real é o total de cotas do sorteio,
-    // e o mínimo é o configurado no sorteio (checado na transação abaixo).
-    if (!Array.isArray(rawNumbers) || rawNumbers.length === 0 || rawNumbers.length > MAX_TOTAL_TICKETS) {
+    // O cliente escolhe somente a quantidade. Os números são sorteados no servidor.
+    if (
+      typeof body.quantity !== 'number' ||
+      !Number.isInteger(body.quantity) ||
+      quantity < 1 ||
+      quantity > MAX_TOTAL_TICKETS
+    ) {
       res.status(400).json({error: 'Selecione pelo menos 1 cota.'});
       return;
     }
@@ -305,20 +338,10 @@ async function startServer() {
       return;
     }
 
-    const requestedNumbers = Array.from(
-      new Set(
-        rawNumbers.map((n) => (typeof n === 'number' && Number.isInteger(n) ? n : -1)),
-      ),
-    );
-    if (requestedNumbers.some((n) => n < 1)) {
-      res.status(400).json({error: 'Lista de números contém valores inválidos.'});
-      return;
-    }
-
     const {session: buyerSession, token: buyerToken} = getOrCreateBuyerSession(req, res);
 
     try {
-      // Step 1: Atomically lock the requested numbers as pending_payment
+      // Step 1: Pick random numbers and lock them atomically as pending_payment.
       const holdResult = await withDbTransaction((db) => {
         const raffle = db.raffles.find((r) => r.id === raffleId);
         if (!raffle) {
@@ -330,16 +353,14 @@ async function startServer() {
             payload: {error: 'Este sorteio já foi encerrado e não aceita novas cotas.'},
           };
         }
-        if (requestedNumbers.some((n) => n > raffle.totalTickets)) {
+        if (quantity > raffle.totalTickets) {
           return {
             status: 400 as const,
-            payload: {
-              error: `Os números devem estar entre 1 e ${raffle.totalTickets}.`,
-            },
+            payload: {error: 'A quantidade escolhida excede o limite deste sorteio.'},
           };
         }
         const minTickets = getMinTicketsPerPurchase(raffle);
-        if (requestedNumbers.length < minTickets) {
+        if (quantity < minTickets) {
           return {
             status: 400 as const,
             payload: {
@@ -349,13 +370,15 @@ async function startServer() {
         }
 
         const soldSet = getAllSoldNumbersForRaffle(raffle, db.reservations);
-        const conflicts = requestedNumbers.filter((n) => soldSet.has(n));
-        if (conflicts.length > 0) {
+        const requestedNumbers = pickRandomAvailableNumbers(
+          raffle.totalTickets,
+          soldSet,
+          quantity,
+        );
+        if (!requestedNumbers) {
           return {
             status: 409 as const,
-            payload: {
-              error: `As cotas ${conflicts.join(', ')} já foram reservadas ou estão aguardando PIX. Atualize sua seleção.`,
-            },
+            payload: {error: 'Não há cotas suficientes para essa quantidade. Escolha uma menor.'},
           };
         }
 
@@ -371,7 +394,7 @@ async function startServer() {
           }
           const bumpTarget = Math.min(raffle.orderBumpCount, availableForBump.length);
           for (let i = 0; i < bumpTarget; i++) {
-            const idx = Math.floor(Math.random() * availableForBump.length);
+            const idx = crypto.randomInt(availableForBump.length);
             bonusNumbers.push(availableForBump[idx]);
             availableForBump.splice(idx, 1);
           }

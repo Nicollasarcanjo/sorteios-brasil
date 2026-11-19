@@ -6,6 +6,7 @@ import {
   PublicLivePartner,
   RaffleCategory,
   RaffleItem,
+  sortRafflesUnfinalizedFirst,
   UserReservation,
 } from './data/raffles';
 import {Header} from './components/Header';
@@ -142,6 +143,20 @@ export default function App() {
     navigateHome('galeria');
   };
 
+  const handleNavigateRules = () => {
+    if (route.view === 'raffle') {
+      const rules = document.getElementById('raffle-rules');
+      if (rules instanceof HTMLDetailsElement) {
+        rules.open = true;
+        rules.scrollIntoView({behavior: 'smooth', block: 'center'});
+        return;
+      }
+    }
+    // Na galeria, leva o participante à lista para abrir uma ação e consultar
+    // o regulamento específico dela.
+    navigateHome('galeria');
+  };
+
   const activeRaffle = useMemo(
     () =>
       route.view === 'raffle'
@@ -168,14 +183,12 @@ export default function App() {
   }, [raffles]);
 
   const filteredRaffles = useMemo(() => {
-    return raffles
-      .filter((item) => {
-        if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
-        if (tierFilter !== 'all' && item.poolTier !== tierFilter) return false;
-        return true;
-      })
-      // Ativos primeiro; finalizados (com resultado) no fim da galeria.
-      .sort((a, b) => Number(a.status === 'finalized') - Number(b.status === 'finalized'));
+    const filtered = raffles.filter((item) => {
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+      if (tierFilter !== 'all' && item.poolTier !== tierFilter) return false;
+      return true;
+    });
+    return sortRafflesUnfinalizedFirst(filtered);
   }, [raffles, categoryFilter, tierFilter]);
 
   const handleReservationCreated = useCallback(
@@ -443,7 +456,13 @@ export default function App() {
 
       <Footer
         onNavigateHome={() => navigateHome()}
+        onNavigateRaffles={() => navigateHome('galeria')}
+        onNavigateHowItWorks={() => navigateHome('modalidades')}
+        onNavigateRules={handleNavigateRules}
+        rulesLinkLabel={route.view === 'raffle' && activeRaffle ? 'Regras desta ação' : 'Consultar regras dos sorteios'}
+        onOpenMyTickets={() => setTicketsDrawerOpen(true)}
         onSelectCategoryAnchor={handleSelectCategoryAnchor}
+        reserveMobileBottomSpace={route.view === 'raffle' && activeRaffle?.status !== 'finalized'}
       />
 
       <MyTicketsDrawer

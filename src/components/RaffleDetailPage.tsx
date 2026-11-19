@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   ArrowLeft,
   Award,
@@ -7,10 +7,7 @@ import {
   Clock,
   Copy,
   Flame,
-  Plus,
   RefreshCw,
-  Search,
-  Shuffle,
   Tag,
   Trash2,
   UserCheck,
@@ -20,7 +17,9 @@ import {
   RaffleItem,
   UserReservation,
   formatBRL,
+  isRaffleNearSellout,
   padTicketNumber,
+  sortRafflesUnfinalizedFirst,
 } from '../data/raffles';
 import {
   SOCIAL_PLATFORMS,
@@ -74,11 +73,8 @@ export function RaffleDetailPage({
   onOpenMyTickets,
   livePartners = [],
 }: RaffleDetailPageProps) {
-  const unavailableSet = useMemo(() => new Set(raffle.soldNumbers), [raffle.soldNumbers]);
-
-  const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
-  const [searchValue, setSearchValue] = useState('');
-  const [searchFeedback, setSearchFeedback] = useState<string | null>(null);
+  const [selectedQuantity, setSelectedQuantity] = useState(0);
+  const [selectionFeedback, setSelectionFeedback] = useState<string | null>(null);
   const [orderBumpSelected, setOrderBumpSelected] = useState(false);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -165,110 +161,39 @@ export function RaffleDetailPage({
 
   const totalSold = raffle.soldCount;
   const remainingCount = Math.max(0, raffle.totalTickets - totalSold);
-  const progressPct = Math.min(100, Math.round((totalSold / raffle.totalTickets) * 100));
-  const isGridMode = raffle.totalTickets <= 100;
-  const isScarce = progressPct >= 75 || remainingCount <= 25;
+  const isScarce = isRaffleNearSellout(raffle);
+  const isCentPricedHighVolume = raffle.ticketPrice < 1 && raffle.totalTickets >= 1_000;
+  const quantityOptions = isCentPricedHighVolume
+    ? [10, 50, 100, 500, 1_000]
+    : [1, 5, 10, 50, 100];
   const isFinalized = raffle.status === 'finalized';
 
-  const selectedSet = useMemo(() => new Set(selectedNumbers), [selectedNumbers]);
-
-  const remainingAfterSelection = Math.max(0, remainingCount - selectedNumbers.length);
+  const remainingAfterSelection = Math.max(0, remainingCount - selectedQuantity);
   const effectiveBumpCount = Math.min(raffle.orderBumpCount, remainingAfterSelection);
-  const canApplyOrderBump = selectedNumbers.length > 0 && effectiveBumpCount > 0;
+  const canApplyOrderBump = selectedQuantity > 0 && effectiveBumpCount > 0;
   const activeBumpCount = canApplyOrderBump && orderBumpSelected ? effectiveBumpCount : 0;
 
   const bumpOriginalPrice = effectiveBumpCount * raffle.ticketPrice;
   const bumpDiscountedPrice =
     bumpOriginalPrice * (1 - raffle.orderBumpDiscountPct / 100);
 
-  const toggleNumber = (num: number) => {
-    if (isFinalized || unavailableSet.has(num)) return;
-    setSearchFeedback(null);
-    setSelectedNumbers((prev) =>
-      prev.includes(num) ? prev.filter((item) => item !== num) : [...prev, num].sort((a, b) => a - b),
-    );
-  };
-
-  const pickAvailableRandoms = (qty: number, excludeSet: Set<number>): number[] => {
-    const total = raffle.totalTickets;
-    const isBlocked = (n: number) => unavailableSet.has(n) || excludeSet.has(n);
-    const blockedEstimate = unavailableSet.size + excludeSet.size;
-
-    // Sorteios grandes com poucas cotas ocupadas: sorteia direto, sem montar a lista
-    // inteira (funciona com milhões de cotas).
-    if (blockedEstimate + qty * 2 < total / 2) {
-      const picked = new Set<number>();
-      while (picked.size < qty) {
-        const n = 1 + Math.floor(Math.random() * total);
-        if (!isBlocked(n)) picked.add(n);
-      }
-      return [...picked];
-    }
-
-    // Caso geral: lista das livres + Fisher-Yates parcial (troca com o fim, sem splice).
-    const pool: number[] = [];
-    for (let i = 1; i <= total; i++) {
-      if (!isBlocked(i)) pool.push(i);
-    }
-    const countToPick = Math.min(qty, pool.length);
-    for (let i = 0; i < countToPick; i++) {
-      const j = i + Math.floor(Math.random() * (pool.length - i));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    return pool.slice(0, countToPick);
-  };
-
   const addRandomNumbers = (qty: number) => {
     if (isFinalized) return;
-    setSearchFeedback(null);
-    const picked = pickAvailableRandoms(qty, selectedSet);
-    if (picked.length === 0) {
-      setSearchFeedback('Todas as cotas disponíveis já foram selecionadas.');
+    setSelectionFeedback(null);
+    const quantityToAdd = Math.min(qty, Math.max(0, remainingCount - selectedQuantity));
+    if (quantityToAdd === 0) {
+      setSelectionFeedback('Não há novas cotas para adicionar.');
       return;
     }
-    setSelectedNumbers((prev) => [...prev, ...picked].sort((a, b) => a - b));
-  };
-
-  const handleSpecificNumberSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = Number.parseInt(searchValue.replace(/\D/g, ''), 10);
-    if (Number.isNaN(parsed) || parsed < 1 || parsed > raffle.totalTickets) {
-      setSearchFeedback(
-        `Informe um número válido entre 1 e ${raffle.totalTickets.toLocaleString('pt-BR')}.`,
-      );
-      return;
-    }
-    if (unavailableSet.has(parsed)) {
-      setSearchFeedback(
-        `O número ${padTicketNumber(parsed, raffle.totalTickets)} já está reservado por outro participante.`,
-      );
-      return;
-    }
-    if (selectedSet.has(parsed)) {
-      setSearchFeedback(
-        `O número ${padTicketNumber(parsed, raffle.totalTickets)} já está na sua seleção.`,
-      );
-      return;
-    }
-
-    setSelectedNumbers((prev) => [...prev, parsed].sort((a, b) => a - b));
-    setSearchValue('');
-    setSearchFeedback(
-      `Número ${padTicketNumber(parsed, raffle.totalTickets)} adicionado à sua reserva.`,
-    );
+    setSelectedQuantity((prev) => prev + quantityToAdd);
   };
 
   const minTickets = Math.max(1, raffle.minTicketsPerPurchase ?? 1);
-  const belowMinimum = selectedNumbers.length < minTickets;
-  const baseCost = selectedNumbers.length * raffle.ticketPrice;
+  const belowMinimum = selectedQuantity < minTickets;
+  const baseCost = selectedQuantity * raffle.ticketPrice;
   const bumpCost = activeBumpCount > 0 ? bumpDiscountedPrice : 0;
   const totalCost = baseCost + bumpCost;
-  const totalSelectedWithBump = selectedNumbers.length + activeBumpCount;
-
-  const oddsPercentage =
-    totalSelectedWithBump > 0
-      ? ((totalSelectedWithBump / raffle.totalTickets) * 100).toFixed(2).replace('.', ',')
-      : '0,00';
+  const totalSelectedWithBump = selectedQuantity + activeBumpCount;
 
   const getBuyerHeaders = useCallback((): Record<string, string> => {
     const headers: Record<string, string> = {};
@@ -440,7 +365,7 @@ export function RaffleDetailPage({
         headers,
         body: JSON.stringify({
           raffleId: raffle.id,
-          numbers: selectedNumbers,
+          quantity: selectedQuantity,
           buyerName: buyerName.trim(),
           buyerEmail: buyerEmail.trim(),
           buyerPhone: buyerPhone.trim(),
@@ -467,7 +392,7 @@ export function RaffleDetailPage({
 
       onReservationCreated(data.reservation as UserReservation, data.raffle as RaffleItem);
       setActiveReservation(data.reservation as UserReservation);
-      setSelectedNumbers([]);
+      setSelectedQuantity(0);
       setOrderBumpSelected(false);
       setCheckoutOpen(false);
     } catch {
@@ -477,59 +402,94 @@ export function RaffleDetailPage({
     }
   };
 
-  const relatedRaffles = allRaffles.filter((item) => item.id !== raffle.id).slice(0, 3);
+  const relatedRaffles = sortRafflesUnfinalizedFirst(
+    allRaffles.filter((item) => item.id !== raffle.id),
+  ).slice(0, 3);
+
+  const openCheckout = () => {
+    setCheckoutOpen(true);
+    window.setTimeout(() => {
+      document.getElementById('checkout-form')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 100);
+  };
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-      <div className="mb-8 flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+    <main className="mx-auto max-w-7xl px-3 pb-32 pt-4 sm:px-6 sm:py-8 lg:px-8 lg:py-12">
+      <div className="mb-4 flex items-center justify-between gap-4 border-b border-white/10 pb-3 sm:mb-8 sm:pb-5">
         <button
           type="button"
           onClick={onBackToGallery}
-          className="inline-flex min-h-[40px] items-center gap-2 text-sm font-medium text-[#B8B2C8] transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
+          className="inline-flex min-h-[40px] items-center gap-2 text-sm font-semibold text-[#B8B2C8] transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          <span>Voltar para a Galeria</span>
+          <span>Voltar aos sorteios</span>
         </button>
 
-        <PartnerLivesTicker partners={livePartners} />
+        <div className="hidden sm:block">
+          <PartnerLivesTicker partners={livePartners} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-start">
-        <div className="space-y-10 lg:col-span-7">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#14111D]">
-            <MediaFrame src={raffle.image} alt={raffle.title} aspectClass="aspect-[4/3]" />
-            <div className="border-t border-white/10 px-6 py-4">
-              <p className="text-sm text-[#B8B2C8]">{raffle.galleryCaption}</p>
-            </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-8">
+        <div className="contents">
+          <div className="order-1 overflow-hidden rounded-2xl border border-white/10 bg-[#11131A] shadow-[0_18px_60px_rgba(0,0,0,0.28)] lg:col-span-7">
+            <MediaFrame
+              src={raffle.image}
+              alt={raffle.title}
+              aspectClass="aspect-[16/10] sm:aspect-[16/10] lg:aspect-[4/3]"
+            >
+              <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-3 sm:p-4">
+                <span className="rounded-full border border-white/20 bg-black/50 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+                  GTA VI · Leonida
+                </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                    isFinalized
+                      ? 'bg-white/15 text-white'
+                      : 'bg-[#7FE5D7] text-[#11131A]'
+                  }`}
+                >
+                  {isFinalized ? 'Encerrado' : 'Sorteio ativo'}
+                </span>
+              </div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-8 sm:px-5 sm:pb-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#FF8EB8]">
+                  {raffle.region}
+                </p>
+              </div>
+            </MediaFrame>
           </div>
 
-          <section className="space-y-4">
-            <h2 className="font-display text-2xl font-bold tracking-wide text-white">
-              Sobre este Sorteio
-            </h2>
-            <p className="max-w-2xl text-base leading-relaxed text-[#C6C0D4]">
+          <details className="order-3 rounded-xl border border-white/10 bg-[#11131A] px-4 py-3 lg:col-span-7">
+            <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-white marker:hidden">
+              Sobre o sorteio
+              <span className="text-lg leading-none text-[#7FE5D7]">+</span>
+            </summary>
+            <p className="max-w-2xl pb-2 pt-3 text-sm leading-relaxed text-[#C6C0D4]">
               {raffle.description}
             </p>
-          </section>
+          </details>
 
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="font-display text-2xl font-bold tracking-wide text-white">
-                O que está incluso no prêmio
-              </h2>
-              <span className="font-mono text-sm font-semibold tabular-nums text-[#FFD166]">
-                Soma dos produtos: {formatBRL(raffle.productsTotalValue)}
-              </span>
-            </div>
-            <ul className="mt-5 divide-y divide-white/10 border-y border-white/10">
+          <details className="order-4 rounded-xl border border-white/10 bg-[#11131A] px-4 py-3 lg:col-span-7">
+            <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-white marker:hidden">
+              Prêmios inclusos
+              <span className="text-lg leading-none text-[#7FE5D7]">+</span>
+            </summary>
+            <p className="pt-2 text-xs font-semibold text-[#F3C86A]">
+              Valor total: {formatBRL(raffle.productsTotalValue)}
+            </p>
+            <ul className="mt-2 divide-y divide-white/10 border-y border-white/10">
               {raffle.products.map((product) => (
                 <li
                   key={product.name}
-                  className="flex items-center justify-between gap-4 py-3.5 text-sm text-[#D6D1E2]"
+                  className="flex items-center justify-between gap-4 py-3 text-sm text-[#D6D1E2]"
                 >
                   <span className="flex items-start gap-3">
                     <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[#FF7EB3]"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[#7FE5D7]"
                       aria-hidden="true"
                     />
                     <span>{product.name}</span>
@@ -540,16 +500,17 @@ export function RaffleDetailPage({
                 </li>
               ))}
             </ul>
-          </section>
+          </details>
 
-          <section className="border-t border-white/10 pt-8">
-            <h2 className="font-display text-2xl font-bold tracking-wide text-white">
-              Transparência & Apuração
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-[#B8B2C8]">
+          <details id="raffle-rules" className="order-5 rounded-xl border border-white/10 bg-[#11131A] px-4 py-3 lg:col-span-7">
+            <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-white marker:hidden">
+              Regras e data do sorteio
+              <span className="text-lg leading-none text-[#7FE5D7]">+</span>
+            </summary>
+            <p className="pb-3 pt-3 text-sm leading-relaxed text-[#B8B2C8]">
               {raffle.drawRule}
             </p>
-            <div className="mt-5 grid grid-cols-1 gap-6 border-t border-white/10 pt-5 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 border-t border-white/10 pt-3 sm:grid-cols-2">
               <div>
                 <span className="block text-xs text-[#958FA8]">Modalidade</span>
                 <span className="mt-1 block text-sm font-semibold text-white">
@@ -557,36 +518,27 @@ export function RaffleDetailPage({
                 </span>
               </div>
               <div>
-                <span className="block text-xs text-[#958FA8]">Tamanho do Grupo</span>
-                <span className="mt-1 block font-mono text-sm font-semibold tabular-nums text-white">
-                  {raffle.totalTickets.toLocaleString('pt-BR')} números
-                </span>
-              </div>
-              <div>
-                <span className="block text-xs text-[#958FA8]">Previsão do Sorteio</span>
+                <span className="block text-xs text-[#958FA8]">Previsão</span>
                 <span className="mt-1 block text-sm font-semibold text-white">
                   {raffle.drawDate}
                 </span>
               </div>
             </div>
-          </section>
+          </details>
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:col-span-5">
-          <div className="rounded-2xl border border-white/15 bg-[#14111D] p-6 sm:p-7">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-[#B8B2C8]">
-              <span className="text-[#FF7EB3]">{raffle.categoryLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span>{raffle.poolLabel}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono tabular-nums">
-                1 em {raffle.totalTickets.toLocaleString('pt-BR')}
-              </span>
+        <aside className="order-2 lg:sticky lg:top-24 lg:col-span-5 lg:row-span-4">
+          <div className="rounded-2xl border border-white/15 bg-gradient-to-b from-[#171A22] to-[#101116] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:p-6">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[#B8B2C8]">
+              <span className="text-[#FF8EB8]">{raffle.categoryLabel}</span>
             </div>
 
-            <h1 className="mt-3 font-display text-3xl font-bold leading-tight tracking-wide text-white sm:text-4xl">
+            <h1 className="mt-2 font-display text-3xl font-bold leading-tight tracking-wide text-white sm:text-4xl">
               {raffle.title}
             </h1>
+            <p className="mt-2 hidden text-sm leading-relaxed text-[#B8B2C8] sm:block">
+              {raffle.subtitle}
+            </p>
 
             {isFinalized ? (
               <div className="mt-6 rounded-xl border border-[#FFD166]/45 bg-[#FFD166]/10 p-5">
@@ -621,42 +573,27 @@ export function RaffleDetailPage({
                   <CountdownTimer targetDate={raffle.drawTimestamp} variant="detail" />
                 </div>
 
-                <div className="mt-5 flex items-baseline justify-between border-y border-white/10 py-4">
+                <div className="mt-4 flex items-center justify-between gap-3 border-y border-white/10 py-3">
                   <div>
-                    <span className="block text-xs text-[#958FA8]">Valor por número</span>
-                    <span className="font-mono text-3xl font-semibold tabular-nums text-white">
+                    <span className="block text-xs text-[#958FA8]">Cada número</span>
+                    <span className="font-mono text-3xl font-bold tabular-nums text-white">
                       {formatBRL(raffle.ticketPrice)}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <span className="block text-xs text-[#958FA8]">Disponíveis agora</span>
-                    <span className="font-mono text-lg font-semibold tabular-nums text-[#FFD166]">
-                      {remainingCount.toLocaleString('pt-BR')} / {raffle.totalTickets.toLocaleString('pt-BR')}
+                  <div
+                    className={`inline-flex max-w-[58%] items-center justify-end gap-1.5 text-right text-xs font-extrabold ${
+                      isScarce
+                        ? 'rounded-lg border border-[#FF8B62]/50 bg-[#FF4E8E]/10 px-3 py-2 text-[#FFD166]'
+                        : 'text-[#7FE5D7]'
+                    }`}
+                    role="status"
+                  >
+                    {isScarce && <Flame className="h-4 w-4 shrink-0 text-[#FF8B62]" aria-hidden="true" />}
+                    <span>
+                      {isScarce
+                        ? 'Poucas cotas disponíveis'
+                        : 'Garanta sua cota antes que esgote'}
                     </span>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span
-                      className={`inline-flex items-center gap-1.5 font-medium ${
-                        isScarce ? 'text-[#FFD166]' : 'text-[#A59FB8]'
-                      }`}
-                    >
-                      {isScarce && <Flame className="h-3.5 w-3.5 text-[#FF4E8E]" aria-hidden="true" />}
-                      <span>
-                        {isScarce
-                          ? `Restam apenas ${remainingCount.toLocaleString('pt-BR')} cotas antes do fechamento`
-                          : 'Progresso do grupo'}
-                      </span>
-                    </span>
-                    <span className="font-mono tabular-nums text-white">{progressPct}%</span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="vice-sunset-bar h-full rounded-full transition-all duration-300"
-                      style={{width: `${progressPct}%`}}
-                    />
                   </div>
                 </div>
 
@@ -867,173 +804,70 @@ export function RaffleDetailPage({
                   )
                 ) : (
                   <>
-                    <div className="mt-6">
-                      <div className="flex items-center justify-between gap-3">
-                        <h2 className="text-sm font-semibold text-white">
-                          {isGridMode
-                            ? 'Escolha seus números no painel'
-                            : 'Monte seu pacote de cotas'}
-                        </h2>
-                        {minTickets > 1 && (
-                          <span className="rounded-full border border-[#FFD166]/40 bg-[#FFD166]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#FFD166]">
-                            Mínimo {minTickets} cotas · {formatBRL(minTickets * raffle.ticketPrice)}
-                          </span>
-                        )}
-                        {selectedNumbers.length > 0 && (
+                    <div className="mt-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h2 className="text-base font-bold text-white">Escolha suas cotas</h2>
+                          <p className="mt-1 text-xs text-[#958FA8]">
+                            Escolha a quantidade; os números serão aleatórios.
+                          </p>
+                        </div>
+                        {selectedQuantity > 0 && (
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedNumbers([]);
+                              setSelectedQuantity(0);
                               setOrderBumpSelected(false);
                             }}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-[#A59FB8] hover:text-white"
+                            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[#A59FB8] hover:text-white"
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            <span>Limpar ({selectedNumbers.length})</span>
+                            <span>Limpar</span>
                           </button>
                         )}
                       </div>
+                      {minTickets > 1 && (
+                        <p className="mt-2 text-[11px] font-semibold text-[#F3C86A]">
+                          Mínimo {minTickets} cotas · {formatBRL(minTickets * raffle.ticketPrice)}
+                        </p>
+                      )}
 
-                      {isGridMode ? (
-                        <>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => addRandomNumbers(1)}
-                              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-[#FF4E8E]/60 hover:bg-[#FF4E8E]/15"
-                            >
-                              <Shuffle className="h-3.5 w-3.5 text-[#FF7EB3]" aria-hidden="true" />
-                              <span>+1 Aleatório</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => addRandomNumbers(3)}
-                              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-[#FF4E8E]/60 hover:bg-[#FF4E8E]/15"
-                            >
-                              <Plus className="h-3.5 w-3.5 text-[#FF7EB3]" aria-hidden="true" />
-                              <span>+3 Aleatórios</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => addRandomNumbers(5)}
-                              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-[#FF4E8E]/60 hover:bg-[#FF4E8E]/15"
-                            >
-                              <Plus className="h-3.5 w-3.5 text-[#FF7EB3]" aria-hidden="true" />
-                              <span>+5 Aleatórios</span>
-                            </button>
-                          </div>
-
-                          <div className="mt-3 flex items-center gap-4 text-[11px] text-[#958FA8]">
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="h-2.5 w-2.5 rounded-sm border border-white/25 bg-[#1B1726]" />
-                              Disponível
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="h-2.5 w-2.5 rounded-sm bg-[#FF4E8E]" />
-                              Selecionado
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="h-2.5 w-2.5 rounded-sm bg-white/10 opacity-40" />
-                              Reservado
-                            </span>
-                          </div>
-
-                          <div
-                            className="mt-3 grid max-h-64 grid-cols-5 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-10 lg:grid-cols-5 xl:grid-cols-10"
-                            role="group"
-                            aria-label="Grade de números disponíveis"
+                      <div className="mt-3 grid grid-cols-5 gap-1.5">
+                        {quantityOptions.map((qty) => (
+                          <button
+                            key={qty}
+                            type="button"
+                            onClick={() => addRandomNumbers(qty)}
+                            aria-label={`Adicionar ${qty.toLocaleString('pt-BR')} ${qty === 1 ? 'cota aleatória' : 'cotas aleatórias'}`}
+                            className="flex min-h-[58px] min-w-0 flex-col items-center justify-center rounded-xl border border-white/15 bg-[#20212A] px-1 py-2 text-white transition-colors hover:border-[#7FE5D7]/70 hover:bg-[#7FE5D7]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7FE5D7]"
                           >
-                            {Array.from({length: raffle.totalTickets}, (_, idx) => idx + 1).map(
-                              (num) => {
-                                const isTaken = unavailableSet.has(num);
-                                const isSelected = selectedSet.has(num);
-                                return (
-                                  <button
-                                    key={num}
-                                    type="button"
-                                    disabled={isTaken}
-                                    onClick={() => toggleNumber(num)}
-                                    aria-pressed={isSelected}
-                                    className={`flex h-9 items-center justify-center rounded border font-mono text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E] ${
-                                      isTaken
-                                        ? 'cursor-not-allowed border-transparent bg-white/[0.04] text-white/25 line-through'
-                                        : isSelected
-                                          ? 'border-[#FF7EB3] bg-[#FF4E8E] text-white'
-                                          : 'border-white/15 bg-[#1B1726] text-[#E2DCEB] hover:border-[#FF4E8E]/70 hover:text-white'
-                                    }`}
-                                  >
-                                    {padTicketNumber(num, raffle.totalTickets)}
-                                  </button>
-                                );
-                              },
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="mt-3 grid grid-cols-5 gap-2">
-                            {[1, 5, 10, 25, 50].map((qty) => (
-                              <button
-                                key={qty}
-                                type="button"
-                                onClick={() => addRandomNumbers(qty)}
-                                className="flex min-h-[44px] flex-col items-center justify-center rounded-lg border border-white/15 bg-[#1B1726] px-2 py-1.5 text-white transition-colors hover:border-[#FF4E8E] hover:bg-[#FF4E8E]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
-                              >
-                                <span className="font-mono text-sm font-semibold tabular-nums">
-                                  +{qty}
-                                </span>
-                                <span className="text-[10px] text-[#958FA8]">cotas</span>
-                              </button>
-                            ))}
-                          </div>
+                            <span className="font-mono text-sm font-bold tabular-nums sm:text-base">
+                              +{qty.toLocaleString('pt-BR')}
+                            </span>
+                            <span className="text-[9px] text-[#A9A7B4]">
+                              {qty === 1 ? 'cota' : 'cotas'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
 
-                          <form onSubmit={handleSpecificNumberSearch} className="mt-4 flex gap-2">
-                            <div className="relative flex-1">
-                              <Search
-                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#958FA8]"
-                                aria-hidden="true"
-                              />
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={searchValue}
-                                onChange={(e) => setSearchValue(e.target.value)}
-                                placeholder={`Buscar número (1 a ${raffle.totalTickets.toLocaleString('pt-BR')})`}
-                                className="min-h-[42px] w-full rounded-lg border border-white/15 bg-[#0B0A10] pl-9 pr-3 font-mono text-xs text-white placeholder:font-sans placeholder:text-[#7D7692] focus:border-[#FF4E8E] focus:outline-none"
-                              />
-                            </div>
-                            <button
-                              type="submit"
-                              className="min-h-[42px] rounded-lg border border-white/15 bg-white/[0.06] px-4 text-xs font-semibold text-white hover:bg-white/15"
-                            >
-                              Adicionar
-                            </button>
-                          </form>
-                        </>
+                      {selectionFeedback && (
+                        <p className="mt-2.5 text-xs text-[#FFD166]" role="status">
+                          {selectionFeedback}
+                        </p>
                       )}
 
-                      {searchFeedback && (
-                        <p className="mt-2.5 text-xs text-[#FFD166]">{searchFeedback}</p>
-                      )}
-
-                      {selectedNumbers.length > 0 && (
+                      {selectedQuantity > 0 && (
                         <div className="mt-4 rounded-xl border border-white/10 bg-[#0B0A10]/70 p-3.5">
                           <span className="block text-xs font-medium text-[#A59FB8]">
-                            Seus números selecionados ({selectedNumbers.length})
+                            {selectedQuantity}{' '}
+                            {selectedQuantity === 1
+                              ? 'cota aleatória selecionada'
+                              : 'cotas aleatórias selecionadas'}
                           </span>
-                          <div className="mt-2 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
-                            {selectedNumbers.map((num) => (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => toggleNumber(num)}
-                                title="Clique para remover"
-                                className="rounded border border-[#FF4E8E]/40 bg-[#FF4E8E]/15 px-2 py-0.5 font-mono text-xs tabular-nums text-white hover:bg-[#FF4E8E]/30"
-                              >
-                                {padTicketNumber(num, raffle.totalTickets)} ×
-                              </button>
-                            ))}
-                          </div>
+                          <p className="mt-1 text-[11px] text-[#958FA8]">
+                            Os números são gerados automaticamente.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1085,13 +919,7 @@ export function RaffleDetailPage({
                     )}
 
                     <div className="mt-6 border-t border-white/10 pt-5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[#A59FB8]">Chance com sua seleção</span>
-                        <span className="font-mono font-semibold tabular-nums text-white">
-                          {totalSelectedWithBump} em {raffle.totalTickets.toLocaleString('pt-BR')} ({oddsPercentage}%)
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-baseline justify-between">
+                      <div className="flex items-baseline justify-between">
                         <span className="text-sm text-[#A59FB8]">
                           Total a pagar ({totalSelectedWithBump}{' '}
                           {totalSelectedWithBump === 1 ? 'cota' : 'cotas'})
@@ -1105,17 +933,17 @@ export function RaffleDetailPage({
                         <button
                           type="button"
                           disabled={belowMinimum}
-                          onClick={() => setCheckoutOpen(true)}
-                          className="mt-5 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-white px-6 py-3 text-sm font-bold text-[#0B0A10] transition-all hover:bg-[#F3E8EE] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
+                          onClick={openCheckout}
+                          className="mt-5 flex min-h-[50px] w-full items-center justify-center rounded-xl bg-[#7FE5D7] px-6 py-3 text-sm font-extrabold text-[#101318] transition-all hover:bg-[#A6F3E8] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7FE5D7]"
                         >
                           {belowMinimum
                             ? minTickets > 1
-                              ? `Compra mínima: ${minTickets} cotas (faltam ${minTickets - selectedNumbers.length})`
-                              : 'Selecione ao menos 1 número'
+                              ? `Compra mínima: ${minTickets} cotas (faltam ${minTickets - selectedQuantity})`
+                              : 'Escolha uma quantidade'
                             : `Reservar ${totalSelectedWithBump} ${totalSelectedWithBump === 1 ? 'Cota' : 'Cotas'} · ${formatBRL(totalCost)}`}
                         </button>
                       ) : (
-                        <form onSubmit={handleConfirmCheckout} className="mt-5 space-y-3 border-t border-white/10 pt-4">
+                        <form id="checkout-form" onSubmit={handleConfirmCheckout} className="mt-5 space-y-3 border-t border-white/10 pt-4">
                           <div>
                             <label
                               htmlFor="buyer-name"
@@ -1331,6 +1159,34 @@ export function RaffleDetailPage({
         </aside>
       </div>
 
+      {!isFinalized && !activeReservation && !checkoutOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/15 bg-[#0B0D11]/95 shadow-[0_-12px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl lg:hidden">
+          <div className="mx-auto flex max-w-xl items-center gap-3 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3">
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-[11px] text-[#A9A7B4]">
+                {selectedQuantity}{' '}
+                {selectedQuantity === 1 ? 'cota selecionada' : 'cotas selecionadas'}
+              </span>
+              <span className="block font-mono text-lg font-bold tabular-nums text-white">
+                {formatBRL(totalCost)}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={belowMinimum}
+              onClick={openCheckout}
+              className="min-h-[48px] shrink-0 rounded-xl bg-[#7FE5D7] px-5 text-sm font-extrabold text-[#101318] transition-colors hover:bg-[#A6F3E8] disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/50"
+            >
+              {belowMinimum
+                ? minTickets > 1
+                  ? `Faltam ${minTickets - selectedQuantity}`
+                  : 'Escolha cotas'
+                : 'Garantir números'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <section className="mt-16 border-t border-white/10 pt-12">
         <div className="mb-6 flex items-baseline justify-between gap-4">
           <h2 className="font-display text-2xl font-bold tracking-wide text-white">
@@ -1364,7 +1220,7 @@ export function RaffleDetailPage({
                   {item.shortTitle}
                 </span>
                 <span className="mt-1 block font-mono text-xs tabular-nums text-[#B8B2C8]">
-                  {formatBRL(item.ticketPrice)} · {item.totalTickets.toLocaleString('pt-BR')} cotas
+                  {formatBRL(item.ticketPrice)} por cota
                 </span>
               </div>
             </button>
