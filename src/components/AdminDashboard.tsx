@@ -1190,7 +1190,7 @@ export function AdminDashboard({onBackToSite, onCatalogChanged}: AdminDashboardP
               onClick={onBackToSite}
               className="hover:text-white"
             >
-              Sorteios Brasil
+              Lucky Sorteios
             </button>
             <span aria-hidden="true">/</span>
             <span className="text-[#FF7EB3]">Painel Administrativo</span>

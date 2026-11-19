@@ -120,7 +120,7 @@ export function RaffleDetailPage({
       if (data.valid && data.code) {
         setAppliedReferral({
           code: data.code,
-          promoterLabel: data.promoterLabel || 'Parceiro Sorteios Brasil',
+          promoterLabel: data.promoterLabel || 'Parceiro Lucky Sorteios',
         });
         setReferralInput(data.code);
         setReferralStatus({

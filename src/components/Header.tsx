@@ -25,7 +25,7 @@ export function Header({
           onClick={onNavigateHome}
           className="font-display text-2xl font-bold tracking-wider text-white whitespace-nowrap shrink-0 transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E8E]"
         >
-          SORTEIOS <span className="vice-sunset-text">BRASIL</span>
+          LUCKY <span className="vice-sunset-text">SORTEIOS</span>
         </button>
 
         <nav

@@ -39,7 +39,7 @@ export function Footer({
               onClick={onNavigateHome}
               className="font-display text-2xl font-bold tracking-wider text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7FE5D7]"
             >
-              SORTEIOS <span className="vice-sunset-text">BRASIL</span>
+              LUCKY <span className="vice-sunset-text">SORTEIOS</span>
             </button>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-[#A59FB8]">
               Sorteios temáticos de GTA VI e PlayStation. Confira o prêmio, o valor, as regras e a previsão de cada ação antes de participar.
@@ -105,7 +105,7 @@ export function Footer({
         </div>
 
         <div className="mt-9 flex flex-col gap-2 border-t border-white/10 pt-5 text-xs leading-relaxed text-[#8E87A3] sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} Sorteios Brasil.</span>
+          <span>© {new Date().getFullYear()} Lucky Sorteios.</span>
           <span>18+ · Consulte as regras e a previsão de cada sorteio antes de participar.</span>
         </div>
       </div>

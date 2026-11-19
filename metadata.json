@@ -1,6 +1,6 @@
 {
-  "name": "Sorteios Brasil",
-  "description": "Galeria oficial de sorteios inspirada em Vice City: cotas populares e grupos exclusivos para GTA VI e combos PlayStation 5.",
+  "name": "Lucky Sorteios",
+  "description": "Sorteios temáticos de GTA VI e PlayStation 5. Confira prêmios, valores e regras de cada ação.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
